@@ -370,6 +370,11 @@ presets: [core, kubernetes]
 
 - Inside the cluster, leave `url` empty: Nigrani uses the pod's service account and CA automatically.
 - `examples/kubernetes-rbac.yaml` creates a service account that can only `get` and `list` pods, nodes and deployments.
+- `examples/kubernetes-deploy.yaml` provides ready-to-apply manifests (Deployment, Service, ConfigMap, and Secret) to run Nigrani in-cluster. Apply both with:
+  ```bash
+  kubectl apply -f examples/kubernetes-rbac.yaml
+  kubectl apply -f examples/kubernetes-deploy.yaml
+  ```
 - The **Kubernetes page** shows nodes ready, pods and how many are unhealthy, restarts in the last hour, deployments
   missing replicas, and a pod table with problems first and the same status words as `kubectl`.
 - **Rules** use the *kubernetes* data source and name a metric, optionally narrowed with `namespace=` and `pod=` (a glob):
