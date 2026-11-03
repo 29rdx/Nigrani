@@ -1,0 +1,30 @@
+Nigrani {{ .Chart.AppVersion }} is installed as "{{ include "nigrani.fullname" . }}".
+
+{{- if .Values.ingress.enabled }}
+
+Open it at:
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- end }}
+{{- else }}
+
+Reach it from your machine:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "nigrani.fullname" . }} 8080:{{ .Values.service.port }}
+then open http://localhost:8080
+{{- end }}
+{{- if .Values.demo }}
+
+Demo mode is on: sample data, read-only, no login.
+{{- else }}
+
+Sign in as "{{ .Values.auth.username }}". The password:
+{{- if .Values.auth.existingSecret }}
+  kubectl -n {{ .Release.Namespace }} get secret {{ .Values.auth.existingSecret }} -o jsonpath='{.data.{{ .Values.auth.existingSecretKey }}}' | base64 -d; echo
+{{- else }}
+  kubectl -n {{ .Release.Namespace }} get secret {{ include "nigrani.fullname" . }} -o jsonpath='{.data.NIGRANI_PASSWORD}' | base64 -d; echo
+{{- end }}
+{{- end }}
+{{- if not .Values.persistence.enabled }}
+
+persistence.enabled is false: the database is lost whenever the pod restarts.
+{{- end }}

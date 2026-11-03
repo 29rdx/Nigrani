@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Helm chart** ([deploy/helm/nigrani](deploy/helm/nigrani)): Deployment (one replica, Recreate), Service, optional Ingress, PersistentVolumeClaim
+  (kept on uninstall), ConfigMap from `config:`, generated or existing admin Secret (stable across upgrades), optional read-only RBAC for the
+  Kubernetes integration, non-root with a read-only root filesystem, `helm test`, and `demo: true`.
 - **Argo CD** (`argocd:` config, read-only): an Argo CD page (health, sync, revision and errors per application), an `argocd`
   data source for alert rules (`out_of_sync`, `degraded`, `progressing`, `sync_failed`, `sync_error`, narrowed with `app=`,
   `project=`, `namespace=`), an `argocd` preset, and every sync as a deploy marker on the incident page and in Deploys. Works with a

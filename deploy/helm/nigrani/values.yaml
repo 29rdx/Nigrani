@@ -1,0 +1,89 @@
+# Nigrani Helm chart. Everything is optional except an admin password (set `auth.password`, or point `auth.existingSecret`
+# at a Secret, or let the chart generate one: see NOTES after install).
+
+image:
+  repository: ghcr.io/nikhilrai-tech/nigrani
+  tag: ""                       # default: the chart's appVersion
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Nigrani keeps its state in one SQLite file, so there is exactly one replica (and the Deployment strategy is Recreate).
+auth:
+  username: admin
+  password: ""                  # empty and no existingSecret: a random password is generated and kept across upgrades
+  existingSecret: ""            # a Secret holding the admin password
+  existingSecretKey: NIGRANI_PASSWORD
+
+# The contents of nigrani.yaml, as YAML. See nigrani.example.yaml in the repository for every option. Put secrets in
+# `extraEnv` / `extraEnvFrom` and refer to them as ${NAME} here.
+config:
+  datasources:
+    prometheus: http://prometheus-server.monitoring.svc.cluster.local:9090
+  presets: [core]
+  # kubernetes: {}              # in-cluster: with rbac.create=true Nigrani watches this cluster, nothing else to set
+  # argocd:
+  #   url: http://argocd-server.argocd.svc.cluster.local
+  #   token: ${ARGOCD_TOKEN}
+
+extraEnv: []                    # e.g. [{name: SLACK_WEBHOOK_URL, valueFrom: {secretKeyRef: {name: alerts, key: slack}}}]
+extraEnvFrom: []                # e.g. [{secretRef: {name: nigrani-secrets}}]
+
+# Demo mode: sample data, read-only, no login. For trying it out; ignores auth.* and the Prometheus URL.
+demo: false
+
+persistence:
+  enabled: true                 # without it the database (rules you edit, incident history) is lost when the pod restarts
+  size: 1Gi
+  storageClass: ""
+  accessModes: [ReadWriteOnce]
+  existingClaim: ""
+
+service:
+  type: ClusterIP
+  port: 8080
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: nigrani.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []                       # [{secretName: nigrani-tls, hosts: [nigrani.example.com]}]
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# Read-only access to pods, nodes and deployments for the Kubernetes integration (a ClusterRole). Off by default; when it
+# is off the pod gets no service account token at all.
+rbac:
+  create: false
+
+resources:
+  requests: {cpu: 100m, memory: 128Mi}
+  limits: {memory: 512Mi}
+
+podAnnotations: {}
+podLabels: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile: {type: RuntimeDefault}
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: {drop: [ALL]}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

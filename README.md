@@ -142,6 +142,43 @@ Without a config file Nigrani runs with the `core` preset and these environment 
 `NIGRANI_PASSWORD` (required), `NIGRANI_USERNAME`, `NIGRANI_PROMETHEUS_URL`, `NIGRANI_LOKI_URL`, `NIGRANI_SECRET`
 (session-signing key; set it so logins survive restarts), `NIGRANI_DATA_DIR`, `NIGRANI_CONFIG`.
 
+### D. Kubernetes (Helm)
+
+The chart is in [deploy/helm/nigrani](deploy/helm/nigrani). From a clone of this repository:
+
+```bash
+helm install nigrani ./deploy/helm/nigrani -n monitoring --create-namespace \
+  --set config.datasources.prometheus=http://prometheus-server.monitoring.svc.cluster.local:9090
+
+kubectl -n monitoring port-forward svc/nigrani 8080:8080        # then open http://localhost:8080
+kubectl -n monitoring get secret nigrani -o jsonpath='{.data.NIGRANI_PASSWORD}' | base64 -d   # the admin password
+```
+
+Without `auth.password` the chart generates a password once and keeps it across upgrades. The settings you will use most
+(all in [values.yaml](deploy/helm/nigrani/values.yaml)):
+
+```yaml
+auth: {existingSecret: nigrani-admin}            # or password: ... ; the Secret key is NIGRANI_PASSWORD
+config:                                          # this is nigrani.yaml, verbatim
+  datasources: {prometheus: http://prometheus-server.monitoring.svc.cluster.local:9090}
+  presets: [core, argocd]
+  kubernetes: {}                                 # watch this cluster (needs rbac.create)
+  argocd: {url: http://argocd-server.argocd.svc.cluster.local, token: "${ARGOCD_TOKEN}"}
+extraEnvFrom: [{secretRef: {name: nigrani-secrets}}]   # ARGOCD_TOKEN, SLACK_WEBHOOK_URL ... referred to as ${NAME} above
+rbac: {create: true}                             # read-only ClusterRole: pods, nodes, deployments
+ingress:
+  enabled: true
+  className: nginx
+  hosts: [{host: nigrani.example.com, paths: [{path: /, pathType: Prefix}]}]
+  tls: [{secretName: nigrani-tls, hosts: [nigrani.example.com]}]
+persistence: {size: 1Gi, storageClass: ""}       # keep it on: the database holds your rules and incident history
+```
+
+Details worth knowing: there is always exactly one replica (one SQLite file) with the `Recreate` strategy; the pod runs as a
+non-root user with a read-only root filesystem; a change to `config` restarts the pod; with `rbac.create: false` (the default)
+the pod gets no service account token at all; `helm uninstall` keeps the data volume; `helm test nigrani` checks the health
+endpoint; `--set demo=true` installs the demo (sample data, read-only) instead.
+
 ## Monitoring several servers (prod + staging)
 
 Add a `servers:` list. Each server has its own Prometheus and, optionally, its own Loki, `services`, uptime `checks`

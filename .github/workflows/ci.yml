@@ -15,6 +15,18 @@ jobs:
       - uses: astral-sh/ruff-action@v3
         with: { src: backend }
 
+  helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: helm lint deploy/helm/nigrani
+      - run: helm template r deploy/helm/nigrani --set rbac.create=true --set ingress.enabled=true > /dev/null
+      - run: helm template r deploy/helm/nigrani --set demo=true --set persistence.enabled=false > /dev/null
+      - name: Chart appVersion matches the code version
+        run: |
+          v=$(PYTHONPATH=backend python3 -c 'from nigrani import __version__; print(__version__)')
+          grep -q "^appVersion: \"$v\"" deploy/helm/nigrani/Chart.yaml || { echo "Chart.yaml appVersion must be $v"; exit 1; }
+
   backend:
     runs-on: ubuntu-latest
     steps:
