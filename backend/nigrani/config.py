@@ -505,20 +505,71 @@ def _merge_by_id(preset_items: list, user_items: list) -> list:
     return list(out.values())
 
 
-def _subst(cfg: Config) -> None:
-    fs = cfg.fs_selector()
-
+def _subst_items(fs: str, tiles: list, pages: list, rules: list) -> None:
     def sub(s: str) -> str:
         return s.replace("{{fs}}", fs)
 
-    for t in cfg.tiles:
+    for t in tiles:
         t.query = sub(t.query)
-    for r in cfg.rules:
+    for r in rules:
         r.expr = sub(r.expr)
-    for p in cfg.pages:
+    for p in pages:
         for panel in p.panels:
             for q in panel.queries:
                 q.expr = sub(q.expr)
+
+
+def _subst(cfg: Config) -> None:
+    _subst_items(cfg.fs_selector(), cfg.tiles, cfg.pages, cfg.rules)
+
+
+def read_preset(name: str) -> dict[str, Any]:
+    f = PRESET_DIR / f"{name}.yaml"
+    if not re.fullmatch(r"[a-z0-9_-]+", name) or not f.is_file():
+        known = ", ".join(sorted(p.stem for p in PRESET_DIR.glob("*.yaml")))
+        raise ConfigError(f"unknown preset '{name}' (available: {known})")
+    return yaml.safe_load(f.read_text()) or {}
+
+
+def preset_items(name: str) -> tuple[list[TileCfg], list[PageCfg], list[RuleCfg]]:
+    data = read_preset(name)
+    try:
+        return ([TileCfg(**x) for x in data.get("tiles", [])], [PageCfg(**x) for x in data.get("pages", [])],
+                [RuleCfg(**x) for x in data.get("rules", [])])
+    except ValidationError as e:
+        raise ConfigError(f"preset {name}: {e}") from e
+
+
+def preset_catalog() -> list[dict[str, Any]]:
+    """Presets Nigrani can recognise from Prometheus metrics: those whose YAML has `detect:` (the metrics that prove the
+    exporter is being scraped), a `title` and an `about` line. The rest need a data source in the config instead."""
+    out = []
+    for f in sorted(PRESET_DIR.glob("*.yaml")):
+        data = yaml.safe_load(f.read_text()) or {}
+        if not data.get("detect"):
+            continue
+        out.append({"name": f.stem, "title": data.get("title", f.stem), "about": data.get("about", ""),
+                    "detect": list(data["detect"]), "tiles": len(data.get("tiles", [])),
+                    "pages": len(data.get("pages", [])), "rules": len(data.get("rules", []))})
+    return out
+
+
+def apply_presets(cfg: Config, base: tuple[list, list, list], names: list[str]) -> None:
+    """Set cfg's tiles, pages and rules to `base` (what the config file produced) plus these presets. Anything already in
+    base wins over a preset with the same id, and `disable:` still applies."""
+    tiles: list[TileCfg] = []
+    pages: list[PageCfg] = []
+    rules: list[RuleCfg] = []
+    for name in names:
+        t, p, r = preset_items(name)
+        tiles += t
+        pages += p
+        rules += r
+    _subst_items(cfg.fs_selector(), tiles, pages, rules)
+    for kind, extra, mine in (("tiles", tiles, base[0]), ("pages", pages, base[1]), ("rules", rules, base[2])):
+        merged = _merge_by_id(extra, mine)
+        off = set(cfg.disable.get(kind, []))
+        setattr(cfg, kind, [x for x in merged if x.id not in off] if off else merged)
 
 
 def demo_defaults() -> dict[str, Any]:
@@ -569,17 +620,10 @@ def load_config(path: str | None = None, *, explicit: bool = False, demo: bool =
     preset_pages: list[PageCfg] = []
     preset_rules: list[RuleCfg] = []
     for name in cfg.presets:
-        f = PRESET_DIR / f"{name}.yaml"
-        if not f.is_file():
-            known = ", ".join(sorted(p.stem for p in PRESET_DIR.glob("*.yaml")))
-            raise ConfigError(f"unknown preset '{name}' (available: {known})")
-        data = yaml.safe_load(f.read_text()) or {}
-        try:
-            preset_tiles += [TileCfg(**x) for x in data.get("tiles", [])]
-            preset_pages += [PageCfg(**x) for x in data.get("pages", [])]
-            preset_rules += [RuleCfg(**x) for x in data.get("rules", [])]
-        except ValidationError as e:
-            raise ConfigError(f"preset {name}: {e}") from e
+        t, p, r = preset_items(name)
+        preset_tiles += t
+        preset_pages += p
+        preset_rules += r
 
     ids = [x.id for x in cfg.servers]
     if len(ids) != len(set(ids)):

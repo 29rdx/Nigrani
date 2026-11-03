@@ -72,6 +72,11 @@ function Layout({ me, onLogout, toggleTheme, setRange }) {
   const firing = useApi('/incidents?status=firing', { interval: 20000 });
 
   useEffect(() => { setOpen(false); }, [route]);
+  useEffect(() => {                                                    // a preset was turned on or off (Discovery)
+    const refresh = () => { pages.reload(); };
+    window.addEventListener('nigrani:presets', refresh);
+    return () => window.removeEventListener('nigrani:presets', refresh);
+  }, [pages.reload]);
 
   const [, section, sub] = route.split('/');
   const nav = useMemo(() => {

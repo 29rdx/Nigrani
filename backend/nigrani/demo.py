@@ -26,7 +26,7 @@ SPELL = 900            # ... lasting 15
 CONTAINERS = ["api", "worker", "nginx", "redis", "postgres"]
 VIEWS = ["accounts.list", "orders.create", "orders.detail", "search", "healthz"]
 METRICS = [
-    "up", "node_cpu_seconds_total", "node_memory_MemAvailable_bytes", "node_memory_MemTotal_bytes",
+    "up", "redis_up", "pg_up", "node_cpu_seconds_total", "node_memory_MemAvailable_bytes", "node_memory_MemTotal_bytes",
     "node_filesystem_avail_bytes", "node_filesystem_size_bytes", "node_load1", "node_network_receive_bytes_total",
     "container_cpu_usage_seconds_total", "container_memory_working_set_bytes", "container_start_time_seconds",
     "django_http_requests_total_by_method_total", "django_http_responses_total_by_status_total",

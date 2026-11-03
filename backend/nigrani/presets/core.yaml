@@ -1,4 +1,7 @@
 # Needs: node-exporter + cAdvisor scraped by Prometheus.
+title: Host and containers
+about: CPU, memory, disk and container health, plus alerts for a full disk, low memory and restarting containers.
+detect: [node_cpu_seconds_total]
 tiles:
   - id: cpu
     title: CPU

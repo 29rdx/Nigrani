@@ -32,6 +32,12 @@ class FakeProm:
         return [{"labels": l, "points": [[start + i * (end - start) / n, v] for i in range(n)]}
                 for l, v in self.values.get(q, [])]
 
+    async def metric_names(self):
+        from nigrani.prom import PromUnavailable
+        if not self.up:
+            raise PromUnavailable("down")
+        return sorted(self.metrics)
+
     async def has_metric(self, name):
         return name in self.metrics
 

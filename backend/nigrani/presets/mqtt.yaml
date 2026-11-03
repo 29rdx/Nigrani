@@ -1,5 +1,8 @@
 # Needs: a Mosquitto exporter (e.g. sapcc/mosquitto-exporter) scraped by Prometheus.
 # Metric names differ between exporters; adjust the expressions if yours differ.
+title: MQTT broker
+about: Clients, messages and subscriptions of a Mosquitto broker.
+detect: [broker_clients_connected]
 pages:
   - id: mqtt
     title: MQTT

@@ -1,4 +1,7 @@
 # Needs: prometheus-community/postgres_exporter scraped by Prometheus.
+title: PostgreSQL
+about: Connections, transactions and database size, with connection alerts.
+detect: [pg_up]
 pages:
   - id: postgres
     title: Postgres

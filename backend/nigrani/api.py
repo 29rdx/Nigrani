@@ -29,7 +29,7 @@ from .kubernetes import Kubernetes
 from .passwords import hash_password, password_problem
 from .ai import Ai, AiError
 from .checks import CheckRunner, result_id
-from .config import Config, ConfigError, ServerView
+from .config import Config, ConfigError, ServerView, apply_presets, preset_catalog
 from .containers import _fresh, collect_containers, collect_host, container_signals, forget_container, safe_name
 from . import backup as backup_mod
 from . import grafana as grafana_links
@@ -127,6 +127,15 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
         raise ConfigError("auth.password is empty. Set NIGRANI_PASSWORD (NIGRANI_ALLOW_NO_AUTH=1 is for local dev only).")
 
     store = Store(str(Path(cfg.data_dir) / "nigrani.db"))
+    # Presets switched on from the UI (Discover) live in the database; the config file's own presets are the base.
+    base_items = (list(cfg.tiles), list(cfg.pages), list(cfg.rules))
+    file_presets = list(cfg.presets)
+    known_presets = {c["name"] for c in preset_catalog()}
+
+    def extra_presets() -> list[str]:
+        return [n for n in (store.kv_get("presets:extra") or []) if n in known_presets and n not in file_presets]
+
+    apply_presets(cfg, base_items, extra_presets())
     views = cfg.server_views()
     if isinstance(prom, dict):
         proms = prom
@@ -262,6 +271,7 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
         ("POST", r"^/api/backup/import$", "backup.import"), ("POST", r"^/api/users$", "user.create"),
         ("PUT", r"^/api/users/\d+$", "user.update"), ("DELETE", r"^/api/users/\d+$", "user.delete"),
         ("DELETE", r"^/api/containers/.+$", "container.forget"),
+        ("POST", r"^/api/discovery/[a-z0-9_-]+/enable$", "preset.enable"), ("DELETE", r"^/api/discovery/[a-z0-9_-]+$", "preset.disable"),
         ("POST", r"^/api/incidents/\d+/explain$", "ai.explain"), ("POST", r"^/api/ai/rule$", "ai.rule"),
         ("POST", r"^/api/announcements$", "announcement.create"), ("POST", r"^/api/announcements/\d+/resolve$", "announcement.resolve"),
         ("DELETE", r"^/api/announcements/\d+$", "announcement.delete"),
@@ -571,6 +581,50 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
             return await collect_host(rt.prom, cfg, start, end, step)
         except PromError as e:
             raise _prom_guard(e) from e
+
+    # ---------------- discovery: which presets the metrics say you could use ----------------
+    @secured.get("/discovery")
+    async def discovery(rt: Runtime = Depends(srv)) -> dict[str, Any]:
+        """Looks at the metric names in Prometheus and says which built-in dashboards and alert sets would work."""
+        extra = extra_presets()
+        error = None
+        try:
+            seen = set(await rt.prom.metric_names())
+        except PromError:
+            seen, error = set(), "Prometheus is not reachable, so nothing can be detected right now."
+        out = []
+        for c in preset_catalog():
+            origin = "config" if c["name"] in file_presets else "ui" if c["name"] in extra else None
+            found = all(m in seen for m in c["detect"])
+            out.append({**c, "origin": origin, "status": "enabled" if origin else "found" if found else "missing"})
+        rank = {"found": 0, "enabled": 1, "missing": 2}
+        return {"presets": sorted(out, key=lambda x: rank[x["status"]]), "error": error}
+
+    @secured.post("/discovery/{name}/enable")
+    async def enable_preset(name: str) -> dict[str, Any]:
+        if name not in known_presets:
+            raise HTTPException(404, "unknown preset")
+        if name in file_presets:
+            raise HTTPException(409, "already enabled in the config file")
+        names = extra_presets()
+        if name not in names:
+            names.append(name)
+        store.kv_set("presets:extra", names)
+        apply_presets(cfg, base_items, names)
+        seed()                                            # the preset's alert rules join the engine's next cycle
+        return {"ok": True, "enabled": names}
+
+    @secured.delete("/discovery/{name}")
+    async def disable_preset(name: str) -> dict[str, Any]:
+        if name not in known_presets:
+            raise HTTPException(404, "unknown preset")
+        if name in file_presets:
+            raise HTTPException(409, "enabled in the config file: remove it from `presets:` there")
+        names = [n for n in extra_presets() if n != name]
+        store.kv_set("presets:extra", names)
+        apply_presets(cfg, base_items, names)
+        seed()                                            # its rules are removed (a firing alert resolves)
+        return {"ok": True, "enabled": names}
 
     # ---------------- dashboard pages (preset / user defined) ----------------
     async def _available(rt: Runtime, metric: str) -> bool:

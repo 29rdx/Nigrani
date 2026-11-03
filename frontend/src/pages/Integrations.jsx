@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
+import { DiscoveryList } from '../components/Discovery';
 import { Badge, Card, Empty, ErrorNote, Modal, Seg, Toggle } from '../components/ui';
 import { useApp } from '../ctx';
 import { fmtAgo } from '../format';
@@ -122,6 +123,7 @@ export default function Integrations() {
 
   return (
     <div className="stack">
+      <DiscoveryList />
       <div className="row wrap">
         <span className="muted">Where alerts and summaries are delivered.</span>
         {can.edit && <><button className="btn right" onClick={sendDigest}>Send summary now</button>

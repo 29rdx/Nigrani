@@ -1,4 +1,7 @@
 # Needs: oliver006/redis_exporter scraped by Prometheus.
+title: Redis
+about: Memory, clients, commands and cache hit rate, with memory alerts.
+detect: [redis_up]
 pages:
   - id: redis
     title: Redis

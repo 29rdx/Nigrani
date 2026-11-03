@@ -1,4 +1,7 @@
 # Needs: django-prometheus (exposes /metrics) scraped by Prometheus.
+title: Django web app
+about: Requests per second, 5xx errors and latency, with alerts when errors or response times climb.
+detect: [django_http_requests_total_by_method_total]
 tiles:
   - id: django-rps
     title: Requests / s

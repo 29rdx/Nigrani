@@ -1,4 +1,7 @@
 # Needs: danihodovic/celery-exporter scraped by Prometheus.
+title: Celery workers
+about: Workers online, queue length and failed tasks, with alerts.
+detect: [celery_worker_up]
 pages:
   - id: celery
     title: Celery

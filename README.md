@@ -65,6 +65,7 @@ silently stops. Nigrani answers the operational questions directly:
 | **Grafana links** | "Open in Grafana" from an alert, a rule or the Logs page (Explore with the same query and time range), plus links to your own dashboards from the incident, container, host and overview screens |
 | **Service pages** | Traffic (Django), Redis, Postgres, AWS RDS, MQTT, Celery out of the box. Add your own pages in YAML |
 | **Incident page** | Click any alert for everything around it: lifecycle timeline, the metric with thresholds, the container's CPU/memory and logs, deploys and restarts just before it started, and other alerts that fired at the same time ("What changed?") |
+| **Auto-discovery** | Nigrani reads the metric names in Prometheus and says "Redis found: turn on its dashboard and alert rules?". One click, no restart, no config file |
 | **Alerts** | Rules editable in the UI (thresholds, duration, PromQL with live preview), silences, and an **incident timeline** showing when each alert started, how long it lasted and what its peak was |
 | **Integrations** | Slack, Teams, Discord, Telegram, Email, WhatsApp (Twilio), signed webhook. Per-channel severity + quiet hours, "send test" button |
 | **Uptime** | HTTP / TCP / TLS-certificate-expiry checks with 30-day uptime |
@@ -482,6 +483,23 @@ grafana:
   `{to}` (milliseconds) are URL-encoded; a link that needs a value the place doesn't have (a container on the host
   page) is left out. Relative URLs are joined to `grafana.url`.
 - With `servers:` each server can have its own `grafana:` block.
+
+## Auto-discovery
+
+![Nigrani suggesting presets it found in Prometheus](docs/screenshots/discovery.png)
+
+Start with nothing but a Prometheus URL and Nigrani looks at the metric names Prometheus already has. Anything it
+recognises (Redis, PostgreSQL, Django, Celery, an MQTT broker, AWS RDS through YACE, host and container metrics) shows
+up on the Overview as *Found in your Prometheus*, with what it would add: dashboard pages, tiles and alert rules. Press
+**Turn on** and it is live straight away, with no restart and no edit to `nigrani.yaml`. The same list, with a switch for
+each, is on the **Integrations** page.
+
+- What you turn on here is remembered (it lives in the data volume) and can be turned off again, which also removes the
+  preset's alert rules. Presets listed under `presets:` in `nigrani.yaml` stay under the file's control.
+- Anything you defined yourself with the same id (a tile, a page or an edited rule) wins over the preset.
+- Detection looks for one telling metric per preset, for example `redis_up` or `pg_up`. If your exporter exposes it
+  under another name, use *Turn on anyway*.
+- Editors and admins can turn presets on and off; viewers see the suggestions.
 
 ## Status page
 

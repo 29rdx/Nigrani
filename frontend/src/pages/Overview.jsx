@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { api, useApi } from '../api';
 import Chart from '../components/Chart';
+import { DiscoverySuggestions } from '../components/Discovery';
 import { DashboardLinks } from '../components/Grafana';
 import Tile from '../components/Tile';
 import { Badge, Card, Empty, ErrorNote, Icon, SevBadge } from '../components/ui';
@@ -48,6 +49,7 @@ export default function Overview() {
   return (
     <div>
       <Banner o={o} />
+      <div style={{ marginBottom: 14 }}><DiscoverySuggestions /></div>
       <div style={{ marginBottom: 14 }}><DashboardLinks context="overview" /></div>
       <div className="grid tiles">
         {o.tiles.map((t) => <Tile key={t.id} t={t} />)}

@@ -5,6 +5,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Auto-discovery**: Nigrani reads the metric names in Prometheus and suggests the built-in presets that fit (Redis, PostgreSQL,
+  Django, Celery, MQTT, AWS RDS, host and containers). *Turn on* applies the preset's page, tiles and alert rules immediately, without
+  a restart or a config edit, and is remembered; *Turn off* removes them again. Suggestions on the Overview, the full list on
+  Integrations. API: `GET /api/discovery`, `POST /api/discovery/{preset}/enable`, `DELETE /api/discovery/{preset}`.
+- Presets describe themselves (`title`, `about`, `detect`) in their YAML.
+
 ## [0.4.1] - 2026-11-03
 
 ### Fixed

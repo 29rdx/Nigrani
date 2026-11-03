@@ -1,5 +1,8 @@
 # Needs: prometheus-community/yet-another-cloudwatch-exporter exporting AWS/RDS metrics
 # (metric names follow its default "aws_rds_<metric>_average" convention).
+title: AWS RDS
+about: CPU, connections and storage of your RDS databases (through the YACE exporter).
+detect: [aws_rds_cpuutilization_average]
 pages:
   - id: rds
     title: AWS RDS
