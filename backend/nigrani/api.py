@@ -37,6 +37,7 @@ from . import grafana as grafana_links
 from .demo import DemoProm, seed_demo
 from .digest import DigestScheduler
 from .engine import Engine, classify
+from .slo import SloEngine, is_applicable
 from .format import build_event
 from .github import GithubDeploys
 from .notifiers import CHANNEL_FIELDS, Notifier, mask_settings
@@ -170,6 +171,7 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
         for v in views if v.id in proms
     }
     default_id = next(iter(runtimes))
+    slo_engine = SloEngine(cfg, store, engine, runtimes)
     digest = DigestScheduler(cfg, store, [(rt.view, rt.prom) for rt in runtimes.values()], notifier)
     auth = Auth(cfg.auth.username, cfg.auth.password, cfg.auth.secret or os.environ.get("NIGRANI_SECRET", ""),
                 cfg.auth.session_hours, enabled=bool(cfg.auth.password), store=store)
@@ -225,7 +227,7 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
         seed()
-        coros = [engine.run(), digest.run(), housekeeping()]
+        coros = [engine.run(), digest.run(), housekeeping(), slo_engine.run()]
         for rt in runtimes.values():
             coros += [rt.checks.run(), containers_loop(rt)]
         tasks = [asyncio.create_task(t) for t in coros]
@@ -238,7 +240,7 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
 
     app = FastAPI(title="Nigrani", version=__version__, lifespan=lifespan, docs_url=None, redoc_url=None)
     app.state.store, app.state.engine, app.state.cfg, app.state.runtimes = store, engine, cfg, runtimes
-    app.state.auth, app.state.oidc = auth, oidc
+    app.state.auth, app.state.oidc, app.state.slo = auth, oidc, slo_engine
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
@@ -335,7 +337,7 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
             "can": {"edit": who.can("editor"), "admin": who.can("admin")}, "app": cfg.app.name, "environment": cfg.app.environment, "version": __version__,
             "default_server": default_id, "ai": ai_client is not None, "demo": cfg.demo,
             "servers": [{"id": rt.view.id, "name": rt.view.name, "environment": rt.view.environment,
-                         "logs": bool(rt.view.datasources.loki), "deploys": rt.github.enabled or rt.view.id in argos, "argocd": rt.view.id in argos,
+                         "logs": bool(rt.view.datasources.loki), "deploys": rt.github.enabled or rt.view.id in argos, "argocd": rt.view.id in argos, "slo": any(is_applicable(x, rt.view.id) for x in cfg.slos),
                          "grafana": bool(rt.view.grafana.url), "sentry": rt.view.id in sentries, "kubernetes": rt.view.id in kubes, "datadog": rt.view.id in dogs,
                          "datasources": ["prometheus"] + (["loki"] if rt.view.id in lokis else []) + (["sentry"] if rt.view.id in sentries else []) + (["cloudwatch"] if rt.view.id in clouds else []) + (["kubernetes"] if rt.view.id in kubes else []) + (["datadog"] if rt.view.id in dogs else []) + (["azure"] if rt.view.id in azures else []) + (["argocd"] if rt.view.id in argos else []),
                          "checks": bool(rt.view.checks)} for rt in runtimes.values()],
@@ -1221,6 +1223,11 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
                         "pods_unhealthy": sum(not healthy(p) for p in pods), "restarts_1h": sum(p["restarts_1h"] for p in pods),
                         "deployments": len(deployments), "deployments_unavailable": sum(d["available"] < d["desired"] for d in deployments)},
         }
+
+    # ---------------- slos ----------------
+    @secured.get("/slos")
+    async def slos(rt: Runtime = Depends(srv)) -> dict[str, Any]:
+        return {"slos": await slo_engine.snapshot(rt), "server": rt.view.id}
 
     # ---------------- argo cd ----------------
     @secured.get("/argocd")

@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **SLOs and burn-rate alerts** (`slos:` config): a target and window, an SLI from two PromQL expressions (`total` with `good` or `errors`) or
+  from an uptime check, an SLOs page with the error budget left and the burn rate of every alert tier, and multi-window, multi-burn-rate alerts
+  (fast, slow, steady and gradual burn, plus budget exhausted) that scale with the window.
 - **Helm chart** ([deploy/helm/nigrani](deploy/helm/nigrani)): Deployment (one replica, Recreate), Service, optional Ingress, PersistentVolumeClaim
   (kept on uninstall), ConfigMap from `config:`, generated or existing admin Secret (stable across upgrades), optional read-only RBAC for the
   Kubernetes integration, non-root with a read-only root filesystem, `helm test`, and `demo: true`.

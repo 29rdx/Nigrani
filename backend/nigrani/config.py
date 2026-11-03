@@ -241,6 +241,44 @@ class AiCfg(_M):
     base_url: str = ""  # optional: an Anthropic-compatible gateway or proxy
 
 
+class SloCfg(_M):
+    """A service level objective with multi-window burn-rate alerts (the Google SRE workbook method).
+
+    The SLI is either two PromQL expressions that use `{{window}}` inside their range selectors (`total` plus `good` or
+    `errors`), or one of Nigrani's uptime checks (`check`)."""
+    id: str
+    name: str
+    target: float = Field(gt=0, lt=100)  # percent, e.g. 99.9
+    window_days: int = Field(30, ge=1, le=90)
+    description: str = ""
+    total: str = ""   # e.g. sum(rate(http_requests_total[{{window}}]))
+    good: str = ""    # e.g. sum(rate(http_requests_total{status!~"5.."}[{{window}}]))
+    errors: str = ""  # alternative to `good`
+    check: str = ""   # an uptime check id: the SLI is the share of successful checks
+    servers: list[str] = Field(default_factory=list)  # empty = every server
+
+    @field_validator("id")
+    @classmethod
+    def _slug(cls, v: str) -> str:
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,39}", v):
+            raise ValueError("id must be lowercase letters, digits, - or _ (max 40)")
+        return v
+
+    @model_validator(mode="after")
+    def _sli(self) -> "SloCfg":
+        if self.check:
+            if self.total or self.good or self.errors:
+                raise ValueError("use either `check`, or `total` with `good` or `errors`, not both")
+            return self
+        if not self.total or bool(self.good) == bool(self.errors):
+            raise ValueError("an SLO needs `check`, or `total` plus exactly one of `good` / `errors`")
+        for field in ("total", "good", "errors"):
+            expr = getattr(self, field)
+            if expr and "{{window}}" not in expr:
+                raise ValueError(f"`{field}` must use {{{{window}}}} in its range selector, e.g. rate(x[{{{{window}}}}])")
+        return self
+
+
 class ArgoCDCfg(_M):
     """Argo CD applications through its REST API (read-only). Create the token with `argocd account generate-token` for an
     account (or project role) that may `get` applications."""
@@ -484,6 +522,7 @@ class Config(_M):
     alerts: AlertsCfg = AlertsCfg()
     status_page: StatusPageCfg = StatusPageCfg()
     ai: AiCfg = AiCfg()
+    slos: list[SloCfg] = Field(default_factory=list)
     demo: bool = False  # sample data and a read-only UI, for trying Nigrani without Prometheus (NIGRANI_DEMO=1)
     disable: dict[str, list[str]] = Field(default_factory=dict)  # {tiles|pages|rules: [ids]}
     data_dir: str = "/data"
@@ -656,6 +695,13 @@ def load_config(path: str | None = None, *, explicit: bool = False, demo: bool =
     unknown = {sid for r in [*cfg.rules, *cfg.channels] for sid in r.servers} - set(ids) if ids else set()
     if unknown:
         raise ConfigError(f"rules/channels reference unknown server(s): {', '.join(sorted(unknown))}")
+
+    slo_ids = [x.id for x in cfg.slos]
+    if len(slo_ids) != len(set(slo_ids)):
+        raise ConfigError("duplicate id in `slos:`")
+    bad = {sid for x in cfg.slos for sid in x.servers} - set(ids) if ids else {sid for x in cfg.slos for sid in x.servers}
+    if bad:
+        raise ConfigError(f"slos reference unknown server(s): {', '.join(sorted(bad))}")
 
     if cfg.auth.oidc and not cfg.app.public_url:
         raise ConfigError("auth.oidc needs app.public_url: the provider redirects the browser back to it")

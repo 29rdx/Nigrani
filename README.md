@@ -67,6 +67,7 @@ silently stops. Nigrani answers the operational questions directly:
 | **Service pages** | Traffic (Django), Redis, Postgres, AWS RDS, MQTT, Celery out of the box. Add your own pages in YAML |
 | **Incident page** | Click any alert for everything around it: lifecycle timeline, the metric with thresholds, the container's CPU/memory and logs, deploys and restarts just before it started, and other alerts that fired at the same time ("What changed?") |
 | **Auto-discovery** | Nigrani reads the metric names in Prometheus and says "Redis found: turn on its dashboard and alert rules?". One click, no restart, no config file |
+| **SLOs** | Say "99.9% of requests succeed over 30 days" and Nigrani tracks the error budget and alerts when it burns too fast, with the multi-window burn-rate method from the Google SRE workbook (quick to fire, quick to clear, quiet about blips) |
 | **Alerts** | Rules editable in the UI (thresholds, duration, PromQL with live preview), silences, and an **incident timeline** showing when each alert started, how long it lasted and what its peak was |
 | **Integrations** | Slack, Teams, Discord, Telegram, Email, WhatsApp (Twilio), signed webhook. Per-channel severity + quiet hours, "send test" button |
 | **Uptime** | HTTP / TCP / TLS-certificate-expiry checks with 30-day uptime |
@@ -581,6 +582,54 @@ each, is on the **Integrations** page.
 - Detection looks for one telling metric per preset, for example `redis_up` or `pg_up`. If your exporter exposes it
   under another name, use *Turn on anyway*.
 - Editors and admins can turn presets on and off; viewers see the suggestions.
+
+## SLOs and burn-rate alerts
+
+![The SLOs page](docs/screenshots/slos.png)
+
+A threshold alert says "errors are high right now". An SLO says how much unreliability you can afford: 99.9% over 30 days
+leaves an **error budget** of 0.1%, about 43 minutes. Nigrani tracks how much of it is left and alerts on the **burn rate**,
+how fast it is being spent compared with an even spend (1× uses exactly the budget over the window).
+
+```yaml
+slos:
+  - id: web-availability
+    name: Web availability
+    target: 99.9                 # percent
+    window_days: 30              # 1-90
+    total:  sum(rate(django_http_responses_total_by_status_total[{{window}}]))
+    errors: sum(rate(django_http_responses_total_by_status_total{status=~"5.."}[{{window}}]))
+
+  - id: fast-responses           # latency: the share of requests answered within 500 ms
+    name: Responses under 500 ms
+    target: 99
+    total: sum(rate(django_http_requests_latency_seconds_by_view_method_count[{{window}}]))
+    good:  sum(rate(django_http_requests_latency_seconds_by_view_method_bucket{le="0.5"}[{{window}}]))
+
+  - id: website-uptime           # no Prometheus needed: use one of your uptime checks
+    name: Website uptime
+    target: 99.5
+    check: web                   # the id of a check under `checks:`
+```
+
+- The SLI is `total` plus either `errors` or `good` (queries that return a rate or a count; several series are summed), or an
+  uptime check. Write `{{window}}` where the range goes: Nigrani fills in `5m`, `1h`, `6h`... as it needs them.
+- Alerts use two windows each, so they fire only while it is real *and* still happening, and clear soon after it stops. With a
+  30-day window:
+
+| Alert | Fires when the burn rate is over... | Severity | Meaning |
+|---|---|---|---|
+| Fast burn | 14.4× in the last 1 h **and** 5 min | critical | 2% of the budget gone in an hour |
+| Slow burn | 6× in 6 h **and** 30 min | critical | 5% gone in six hours |
+| Steady burn | 3× in 1 d **and** 2 h | warning | 10% gone in a day |
+| Gradual burn | 1× in 3 d **and** 6 h | warning | on course to use the whole budget |
+| Budget exhausted | the SLI is under the target for the whole window | critical | |
+
+  The factors scale with `window_days` (a 7-day SLO alerts at lower factors) and windows longer than the SLO window are left out.
+- The **SLOs** page shows the current SLI, how much budget is left (in percent and as minutes of equivalent downtime) and every
+  alert tier with its burn rate right now.
+- No traffic yet shows "No data yet" and raises nothing. If Prometheus cannot be queried, open alerts stay open: an outage
+  is not a recovery. `servers: [prod]` limits an SLO to some servers.
 
 ## Status page
 
