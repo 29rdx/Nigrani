@@ -22,6 +22,7 @@ from .auth import COOKIE, Auth, Identity, make_authorizer
 from .oidc import Oidc, OidcError, new_login
 from .sentry import SORTS as SENTRY_SORTS
 from .sentry import Sentry
+from .argocd import ArgoCD, sync_failing
 from .azure import Azure
 from .cloudwatch import CloudWatch
 from .datadog import Datadog
@@ -120,7 +121,7 @@ class Runtime:
 def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
                loki: "dict[str, Prom] | None" = None, sentry: "dict[str, Any] | None" = None,
                cloudwatch: "dict[str, Any] | None" = None, kubernetes: "dict[str, Any] | None" = None,
-               datadog: "dict[str, Any] | None" = None, azure: "dict[str, Any] | None" = None,
+               datadog: "dict[str, Any] | None" = None, azure: "dict[str, Any] | None" = None, argocd: "dict[str, Any] | None" = None,
                ai: "Ai | None" = None) -> FastAPI:
     allow_no_auth = os.environ.get("NIGRANI_ALLOW_NO_AUTH") == "1"
     if not cfg.auth.password and not allow_no_auth and not cfg.demo:
@@ -156,13 +157,14 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
     kubes = kubernetes if kubernetes is not None else {v.id: Kubernetes(v.kubernetes, v.datasources.timeout) for v in views if v.kubernetes.enabled}
     dogs = datadog if datadog is not None else {v.id: Datadog(v.datadog, v.datasources.timeout) for v in views if v.datadog.enabled}
     azures = azure if azure is not None else {v.id: Azure(v.azure, v.datasources.timeout) for v in views if v.azure.enabled}
-    engine = Engine(store, proms, notifier, cfg, lokis=lokis, sentries=sentries, clouds=clouds, kubes=kubes, dogs=dogs, azures=azures)
+    argos = argocd if argocd is not None else {v.id: ArgoCD(v.argocd, v.datasources.timeout) for v in views if v.argocd.enabled}
+    engine = Engine(store, proms, notifier, cfg, lokis=lokis, sentries=sentries, clouds=clouds, kubes=kubes, dogs=dogs, azures=azures, argos=argos)
 
     def datasources_available() -> set[str]:
-        return {"prometheus"} | ({"loki"} if lokis else set()) | ({"sentry"} if sentries else set()) | ({"cloudwatch"} if clouds else set()) | ({"kubernetes"} if kubes else set()) | ({"datadog"} if dogs else set()) | ({"azure"} if azures else set())
+        return {"prometheus"} | ({"loki"} if lokis else set()) | ({"sentry"} if sentries else set()) | ({"cloudwatch"} if clouds else set()) | ({"kubernetes"} if kubes else set()) | ({"datadog"} if dogs else set()) | ({"azure"} if azures else set()) | ({"argocd"} if argos else set())
 
     def client_for(datasource: str, server_id: str, prom: Any) -> Any:
-        return {"loki": lokis, "sentry": sentries, "cloudwatch": clouds, "kubernetes": kubes, "datadog": dogs, "azure": azures}.get(datasource, {server_id: prom}).get(server_id)
+        return {"loki": lokis, "sentry": sentries, "cloudwatch": clouds, "kubernetes": kubes, "datadog": dogs, "azure": azures, "argocd": argos}.get(datasource, {server_id: prom}).get(server_id)
     runtimes: dict[str, Runtime] = {
         v.id: Runtime(v, proms[v.id], CheckRunner(cfg, store, engine, v), GithubDeploys(v.github))
         for v in views if v.id in proms
@@ -231,7 +233,7 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        for p in [*proms.values(), *lokis.values(), *sentries.values(), *clouds.values(), *kubes.values(), *dogs.values(), *azures.values()]:
+        for p in [*proms.values(), *lokis.values(), *sentries.values(), *clouds.values(), *kubes.values(), *dogs.values(), *azures.values(), *argos.values()]:
             await p.close()
 
     app = FastAPI(title="Nigrani", version=__version__, lifespan=lifespan, docs_url=None, redoc_url=None)
@@ -333,12 +335,12 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
             "can": {"edit": who.can("editor"), "admin": who.can("admin")}, "app": cfg.app.name, "environment": cfg.app.environment, "version": __version__,
             "default_server": default_id, "ai": ai_client is not None, "demo": cfg.demo,
             "servers": [{"id": rt.view.id, "name": rt.view.name, "environment": rt.view.environment,
-                         "logs": bool(rt.view.datasources.loki), "deploys": rt.github.enabled,
+                         "logs": bool(rt.view.datasources.loki), "deploys": rt.github.enabled or rt.view.id in argos, "argocd": rt.view.id in argos,
                          "grafana": bool(rt.view.grafana.url), "sentry": rt.view.id in sentries, "kubernetes": rt.view.id in kubes, "datadog": rt.view.id in dogs,
-                         "datasources": ["prometheus"] + (["loki"] if rt.view.id in lokis else []) + (["sentry"] if rt.view.id in sentries else []) + (["cloudwatch"] if rt.view.id in clouds else []) + (["kubernetes"] if rt.view.id in kubes else []) + (["datadog"] if rt.view.id in dogs else []) + (["azure"] if rt.view.id in azures else []),
+                         "datasources": ["prometheus"] + (["loki"] if rt.view.id in lokis else []) + (["sentry"] if rt.view.id in sentries else []) + (["cloudwatch"] if rt.view.id in clouds else []) + (["kubernetes"] if rt.view.id in kubes else []) + (["datadog"] if rt.view.id in dogs else []) + (["azure"] if rt.view.id in azures else []) + (["argocd"] if rt.view.id in argos else []),
                          "checks": bool(rt.view.checks)} for rt in runtimes.values()],
             "features": {"logs": any(rt.view.datasources.loki for rt in runtimes.values()),
-                         "deploys": any(rt.github.enabled for rt in runtimes.values()),
+                         "deploys": any(rt.github.enabled or rt.view.id in argos for rt in runtimes.values()),
                          "checks": any(rt.view.checks for rt in runtimes.values()),
                          "digest": cfg.digest.enabled, "auth": auth.enabled, "multi": len(runtimes) > 1},
         }
@@ -808,9 +810,17 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
         except PromError as e:
             problems.append(f"restarts: {e}")
 
+        deploys_seen: list[dict[str, Any]] = []
         if rt.github.enabled:
-            out["deploys"] = [r for r in await rt.github.runs()
-                              if r.get("finished_at") and start - 3600 <= r["finished_at"] <= end]
+            deploys_seen += await rt.github.runs()
+        argo = argos.get(rt.view.id)
+        if argo is not None:                       # Argo CD syncs are deploys too
+            try:
+                deploys_seen += await argo.deploys()
+            except PromError as e:
+                problems.append(f"argo cd: {e}")
+        out["deploys"] = sorted((r for r in deploys_seen if r.get("finished_at") and start - 3600 <= r["finished_at"] <= end),
+                                key=lambda r: r["finished_at"])
 
         g = rt.view.grafana
         out["grafana"] = {
@@ -1102,7 +1112,16 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
 
     @secured.get("/deploys")
     async def deploys(rt: Runtime = Depends(srv)) -> dict[str, Any]:
-        return {"enabled": rt.github.enabled, "error": rt.github.error, "runs": await rt.github.runs()}
+        runs = list(await rt.github.runs())
+        error = rt.github.error
+        argo = argos.get(rt.view.id)
+        if argo is not None:
+            try:
+                runs += await argo.deploys()
+            except PromError:
+                error = error or argo.last_error or "Argo CD could not be read"
+        runs.sort(key=lambda r: -(r.get("finished_at") or r.get("started_at") or 0))
+        return {"enabled": rt.github.enabled or argo is not None, "error": error, "runs": runs}
 
     # ---------------- backup / restore ----------------
     @secured.get("/backup")
@@ -1201,6 +1220,30 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
             "summary": {"nodes": len(nodes), "nodes_ready": sum(n["ready"] for n in nodes), "pods": len(pods),
                         "pods_unhealthy": sum(not healthy(p) for p in pods), "restarts_1h": sum(p["restarts_1h"] for p in pods),
                         "deployments": len(deployments), "deployments_unavailable": sum(d["available"] < d["desired"] for d in deployments)},
+        }
+
+    # ---------------- argo cd ----------------
+    @secured.get("/argocd")
+    async def argocd_overview(project: str = Query("", max_length=100), rt: Runtime = Depends(srv)) -> dict[str, Any]:
+        a = argos.get(rt.view.id)
+        if a is None:
+            raise HTTPException(404, f"Argo CD is not configured for {rt.view.name} (argocd.url and argocd.token)")
+        try:
+            apps = await a.apps()
+        except PromError as e:
+            raise _prom_guard(e) from e
+        projects = sorted({x["project"] for x in apps})
+        if project:
+            apps = [x for x in apps if x["project"] == project]
+        ok = lambda x: x["sync"] == "Synced" and x["health"] == "Healthy" and not sync_failing(x) and not x["errors"]  # noqa: E731
+        rank = lambda x: (ok(x), x["health"] == "Progressing", x["name"])  # noqa: E731
+        return {
+            "apps": sorted(apps, key=rank)[:500], "projects": projects, "truncated": len(apps) > 500, "url": a.base,
+            "summary": {"total": len(apps), "healthy": sum(x["health"] == "Healthy" for x in apps),
+                        "synced": sum(x["sync"] == "Synced" for x in apps), "out_of_sync": sum(x["sync"] == "OutOfSync" for x in apps),
+                        "degraded": sum(x["health"] in ("Degraded", "Missing") for x in apps),
+                        "progressing": sum(x["health"] == "Progressing" for x in apps),
+                        "failed": sum(sync_failing(x) or bool(x["errors"]) for x in apps)},
         }
 
     # ---------------- datadog ----------------

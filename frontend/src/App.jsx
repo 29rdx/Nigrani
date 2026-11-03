@@ -17,6 +17,7 @@ import Logs from './pages/Logs';
 import Overview from './pages/Overview';
 import PanelPage from './pages/PanelPage';
 import Sentry from './pages/Sentry';
+import ArgoCD from './pages/ArgoCD';
 import Kubernetes from './pages/Kubernetes';
 import Datadog from './pages/Datadog';
 import Status from './pages/Status';
@@ -90,6 +91,7 @@ function Layout({ me, onLogout, toggleTheme, setRange }) {
     const tail = [
       ...(cur.logs ? [{ to: '/logs', label: 'Logs', icon: 'file', key: 'logs' }] : []),
       ...(cur.datadog ? [{ to: '/datadog', label: 'Datadog', icon: 'pulse', key: 'datadog' }] : []),
+      ...(cur.argocd ? [{ to: '/argocd', label: 'Argo CD', icon: 'rocket', key: 'argocd' }] : []),
       ...(cur.kubernetes ? [{ to: '/kubernetes', label: 'Kubernetes', icon: 'layers', key: 'kubernetes' }] : []),
       ...(cur.sentry ? [{ to: '/sentry', label: 'Sentry', icon: 'bug', key: 'sentry' }] : []),
       { to: '/alerts/active', label: 'Alerts', icon: 'bell', key: 'alerts', count: firing.data?.length || 0 },
@@ -116,6 +118,7 @@ function Layout({ me, onLogout, toggleTheme, setRange }) {
     case 'logs': view = <Logs />; break;
     case 'sentry': view = <Sentry />; break;
     case 'kubernetes': view = <Kubernetes />; break;
+    case 'argocd': view = <ArgoCD />; break;
     case 'datadog': view = <Datadog />; break;
     case 'alerts': view = <Alerts tab={sub || 'active'} />; break;
     case 'incident': view = <Incident key={sub} id={sub} />; break;

@@ -1,0 +1,43 @@
+# Needs: the `argocd:` block in the config (the Argo CD URL and a read-only API token).
+# Rules in this preset ask the Argo CD API directly, one alert per application. Servers without Argo CD skip them.
+rules:
+  - id: argocd-out-of-sync
+    name: Application out of sync
+    datasource: argocd
+    expr: out_of_sync
+    warn: 0
+    for_seconds: 900
+    unit: short
+    summary: The live state of an application has differed from Git for a while. Argo CD may be stuck, or someone changed it by hand.
+  - id: argocd-degraded
+    name: Application degraded
+    datasource: argocd
+    expr: degraded
+    crit: 0
+    for_seconds: 300
+    unit: short
+    summary: Something an application deployed is Degraded or Missing. Check its resources in Argo CD.
+  - id: argocd-sync-failed
+    name: Argo CD sync failed
+    datasource: argocd
+    expr: sync_failed
+    crit: 0
+    for_seconds: 60
+    unit: short
+    summary: The last sync of an application failed. The message is on the Argo CD page.
+  - id: argocd-sync-error
+    name: Argo CD cannot render an application
+    datasource: argocd
+    expr: sync_error
+    warn: 0
+    for_seconds: 300
+    unit: short
+    summary: Argo CD reports an error for an application, for example it cannot reach the Git repository or the manifests do not render.
+  - id: argocd-stuck-progressing
+    name: Rollout stuck progressing
+    datasource: argocd
+    expr: progressing
+    warn: 0
+    for_seconds: 1800
+    unit: short
+    summary: An application has been Progressing for half an hour, so a rollout is probably not finishing.

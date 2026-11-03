@@ -70,10 +70,11 @@ class Engine:
     def __init__(self, store: Store, proms: dict[str, Prom] | Prom, notifier: Notifier, cfg: Config,
                  clock: Callable[[], float] = time.time, lokis: dict[str, Prom] | None = None,
                  sentries: dict[str, Any] | None = None, clouds: dict[str, Any] | None = None,
-                 kubes: dict[str, Any] | None = None, dogs: dict[str, Any] | None = None, azures: dict[str, Any] | None = None):
+                 kubes: dict[str, Any] | None = None, dogs: dict[str, Any] | None = None, azures: dict[str, Any] | None = None, argos: dict[str, Any] | None = None):
         self.store, self.notifier, self.cfg, self.clock = store, notifier, cfg, clock
         self.lokis: dict[str, Prom] = lokis or {}  # server id -> Loki client (only servers that have Loki)
         self.azures: dict[str, Any] = azures or {}  # server id -> Azure Monitor client
+        self.argos: dict[str, Any] = argos or {}  # server id -> Argo CD client
         self.dogs: dict[str, Any] = dogs or {}  # server id -> Datadog client
         self.kubes: dict[str, Any] = kubes or {}  # server id -> Kubernetes client
         self.clouds: dict[str, Any] = clouds or {}  # server id -> CloudWatch client
@@ -293,6 +294,8 @@ class Engine:
             return self.dogs.get(server_id)
         if datasource == "azure":
             return self.azures.get(server_id)
+        if datasource == "argocd":
+            return self.argos.get(server_id)
         return prom
 
     def drop_rule(self, rule_id: str, now: float | None = None, server: str | None = None) -> None:
@@ -353,7 +356,7 @@ class Engine:
                 # Series that vanished (container removed, exporter label change) resolve after a grace period.
                 # For a log rule a missing series just means "no matching lines", i.e. healthy: resolve at once
                 # (a Loki outage raises an error above instead, which never resolves anything).
-                grace = 0 if rule.get("datasource", "prometheus") in ("loki", "sentry", "kubernetes") else self.cfg.alerts.absent_grace
+                grace = 0 if rule.get("datasource", "prometheus") in ("loki", "sentry", "kubernetes", "argocd") else self.cfg.alerts.absent_grace
                 for k in [k for k in self.state if k[0] == rule["id"] and k[1] == server_id and k not in seen]:
                     st = self.state[k]
                     if now - st.last_seen >= grace:

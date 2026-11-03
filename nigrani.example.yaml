@@ -37,6 +37,7 @@ datasources:
 #   sentry    Sentry (sentry:)           new-issue and fatal-issue alerts
 #   azure     Azure Monitor (azure:)        VM, PostgreSQL, SQL and App Service plan rules
 #   datadog   Datadog (datadog:)            host CPU, memory and disk from the Datadog Agent
+#   argocd    Argo CD (argocd:)             out-of-sync, degraded and failing applications
 #   kubernetes Kubernetes (kubernetes:)    crash-looping pods, unready nodes, deployments missing replicas
 #   cloudwatch AWS CloudWatch (cloudwatch:) RDS and EC2 alerts read straight from CloudWatch
 presets: [core, django, redis, celery]
@@ -155,6 +156,13 @@ status_page:
 #   api_key: ${ANTHROPIC_API_KEY}
 #   model: claude-opus-5-5
 #   effort: low                  # low | medium | high
+
+# Argo CD (read-only): applications on their own page, alert rules (preset `argocd`), and syncs as deploy markers.
+# Create the token with an account that may only `get` applications (see the README).
+# argocd:
+#   url: https://argocd.example.com
+#   token: ${ARGOCD_TOKEN}
+#   projects: []                 # empty = every project the token can see
 
 # ---- Customising ------------------------------------------------------------------------------------------
 

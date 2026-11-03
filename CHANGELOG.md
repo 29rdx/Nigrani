@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Argo CD** (`argocd:` config, read-only): an Argo CD page (health, sync, revision and errors per application), an `argocd`
+  data source for alert rules (`out_of_sync`, `degraded`, `progressing`, `sync_failed`, `sync_error`, narrowed with `app=`,
+  `project=`, `namespace=`), an `argocd` preset, and every sync as a deploy marker on the incident page and in Deploys. Works with a
+  token that can only `get` applications.
 - **Auto-discovery**: Nigrani reads the metric names in Prometheus and suggests the built-in presets that fit (Redis, PostgreSQL,
   Django, Celery, MQTT, AWS RDS, host and containers). *Turn on* applies the preset's page, tiles and alert rules immediately, without
   a restart or a config edit, and is remembered; *Turn off* removes them again. Suggestions on the Overview, the full list on

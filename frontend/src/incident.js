@@ -18,7 +18,7 @@ export function buildTimeline({ events = [], deploys = [], restarts = [], relate
     }
   }
   for (const d of deploys) {
-    items.push({ ts: d.finished_at, kind: 'deploy', title: `Deploy ${d.sha} ${d.conclusion || d.status}`, detail: `${d.name}${d.actor ? ` by ${d.actor}` : ''}`, tone: d.conclusion === 'success' ? 'info' : 'warn', url: d.url });
+    items.push({ ts: d.finished_at, kind: 'deploy', title: d.source === 'argocd' ? `Argo CD ${d.conclusion === 'success' ? 'synced' : 'sync failed:'} ${d.name} ${d.sha}` : `Deploy ${d.sha} ${d.conclusion || d.status}`, detail: d.source === 'argocd' ? 'Argo CD' : `${d.name}${d.actor ? ` by ${d.actor}` : ''}`, tone: d.conclusion === 'success' ? 'info' : 'warn', url: d.url });
   }
   // A crash loop is dozens of restarts: show each container's restarts as one line instead of burying the timeline.
   const byContainer = new Map();
@@ -44,7 +44,10 @@ export function whatChanged({ incident, deploys = [], restarts = [], related = [
   const out = [];
   const before = (list, key) => list.filter((x) => x[key] <= t0 + 60 && t0 - x[key] <= lookbackSeconds).sort((a, b) => b[key] - a[key]);
   const deploy = before(deploys, 'finished_at')[0];
-  if (deploy) out.push({ tone: 'warn', text: `Deploy ${deploy.sha} (${deploy.conclusion || deploy.status}) finished ${fmtDuration(Math.max(0, t0 - deploy.finished_at))} before this alert started.` });
+  if (deploy) {
+    const what = deploy.source === 'argocd' ? `Argo CD ${deploy.conclusion === 'success' ? 'synced' : 'failed to sync'} ${deploy.name} (${deploy.sha})` : `Deploy ${deploy.sha} (${deploy.conclusion || deploy.status})`;
+    out.push({ tone: 'warn', text: `${what} ${deploy.source === 'argocd' ? '' : 'finished '}${fmtDuration(Math.max(0, t0 - deploy.finished_at))} before this alert started.`.replace('  ', ' ') });
+  }
   const own = incident.labels && (incident.labels.name || incident.labels.container);
   const recent = before(restarts, 'ts');
   const ownRestarts = recent.filter((r) => r.container === own);

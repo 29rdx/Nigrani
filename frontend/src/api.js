@@ -6,7 +6,7 @@ export function setCurrentServer(id) { currentServer = id; }
 
 // Endpoints that read one server's Prometheus/Loki/checks. Everything else (rules, channels, incidents,
 // silences, fleet...) is global and takes an explicit `server` filter where it makes sense.
-const SCOPED = ['/overview', '/containers', '/host', '/pages', '/logs', '/deploys', '/checks', '/rules/test', '/grafana-links', '/sentry', '/kubernetes', '/datadog', '/discovery'];
+const SCOPED = ['/overview', '/containers', '/host', '/pages', '/logs', '/deploys', '/checks', '/rules/test', '/grafana-links', '/sentry', '/kubernetes', '/datadog', '/discovery', '/argocd'];
 export function scoped(path, server = currentServer) {
   if (!server || !SCOPED.some((p) => path === p || path.startsWith(`${p}/`) || path.startsWith(`${p}?`))) return path;
   return `${path}${path.includes('?') ? '&' : '?'}server=${encodeURIComponent(server)}`;

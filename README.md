@@ -60,6 +60,7 @@ silently stops. Nigrani answers the operational questions directly:
 | **Sentry** | Unresolved, new and fatal issues on their own page, alert rules over Sentry searches, and the matching issues on an incident's page |
 | **AWS CloudWatch** | Alert rules straight on CloudWatch metrics (RDS, EC2, ELB, SQS, anything), one alert per database or instance, with the metric charted on the incident page. No exporter needed |
 | **Kubernetes** | Nodes, pods and deployments on their own page, and alert rules for crash-looping or failed pods, stuck or restarting pods, unready nodes and deployments missing replicas. Read-only, no agent in the cluster |
+| **Argo CD** | The state of your GitOps applications on their own page (health, sync, revision, errors), alert rules for applications that are out of sync, degraded, stuck progressing or failing to sync, and every sync as a deploy marker on the incident page. Read-only, with a token that can only `get` |
 | **Datadog** | Alert rules straight on Datadog metric queries (one alert per host or tag), the metric charted on the incident page, and a page of monitors that are alerting, warning or have no data |
 | **Azure Monitor** | Alert rules straight on Azure Monitor metrics (VMs, PostgreSQL, SQL, App Service...), one alert per resource, with the metric charted on the incident page |
 | **Grafana links** | "Open in Grafana" from an alert, a rule or the Logs page (Explore with the same query and time range), plus links to your own dashboards from the incident, container, host and overview screens |
@@ -401,6 +402,49 @@ presets: [core, kubernetes]
   adds a rule for each. If the API is unreachable or refuses the token the rule shows why and nothing is raised or
   resolved because of it.
 - With `servers:` each server can point at its own cluster.
+
+## Argo CD
+
+![The Argo CD page](docs/screenshots/argocd.png)
+
+Nigrani reads your applications from the Argo CD API (read-only): an **Argo CD** page with health, sync status, revision and
+the error Argo reports for each one, alert rules per application, and every sync shown as a deploy marker on incident
+pages and in the Deploys list. That answers "did a sync change something right before this broke?".
+
+```yaml
+argocd:
+  url: https://argocd.example.com    # include the root path if you set one
+  token: ${ARGOCD_TOKEN}
+  # projects: [payments, data]       # default: every project the token can see
+  # verify_tls: false                # for a lab with a self-signed certificate
+  # ca_file: /certs/ca.crt
+
+presets: [core, argocd]              # five rules, below
+```
+
+**Create a token that can only read.** In `argocd-cm` add an account with an API key, in `argocd-rbac-cm` let it `get`
+applications, then generate the token:
+
+```bash
+kubectl -n argocd patch cm argocd-cm --type merge -p '{"data":{"accounts.nigrani":"apiKey"}}'
+kubectl -n argocd patch cm argocd-rbac-cm --type merge -p '{"data":{"policy.csv":"p, nigrani, applications, get, */*, allow\n"}}'
+argocd account generate-token --account nigrani        # use this as ARGOCD_TOKEN
+```
+
+If your Argo CD already has a `policy.csv`, add the `p, nigrani, ...` line to it instead of replacing it. Syncing or deleting
+with this token is refused by Argo CD (HTTP 403).
+
+Rule expressions name a metric, optionally narrowed with `app=<glob>`, `project=<name>` and `namespace=<name>`. The value is `1` for each
+application in trouble, so a rule alerts once per application and resolves when it is healthy again. Use the rule's *for* to
+say how long it may stay that way.
+
+| Metric | Application that... | `argocd` preset |
+|---|---|---|
+| `out_of_sync` | differs from Git | warning after 15 min |
+| `degraded` | is Degraded or Missing | critical after 5 min |
+| `sync_failed` | failed its last sync, or Argo is retrying one that keeps failing | critical after 1 min |
+| `sync_error` | has an error condition: cannot reach the repository, manifests do not render | warning after 5 min |
+| `progressing` | is still Progressing | warning after 30 min (a rollout that never finishes) |
 
 ## Datadog
 

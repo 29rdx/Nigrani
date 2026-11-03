@@ -162,7 +162,7 @@ class RuleCfg(_M):
     summary: str = ""
     enabled: bool = True
     servers: list[str] = Field(default_factory=list)  # empty = evaluate on every server
-    datasource: Literal["prometheus", "loki", "sentry", "cloudwatch", "kubernetes", "datadog", "azure"] = "prometheus"  # loki: LogQL metric query; sentry: a Sentry search
+    datasource: Literal["prometheus", "loki", "sentry", "cloudwatch", "kubernetes", "datadog", "azure", "argocd"] = "prometheus"  # loki: LogQL metric query; sentry: a Sentry search
 
 
 ChannelType = Literal["slack", "teams", "discord", "telegram", "email", "webhook", "whatsapp"]
@@ -239,6 +239,27 @@ class AiCfg(_M):
     effort: Literal["low", "medium", "high"] = "low"  # how hard the model thinks: higher is slower and costs more
     max_tokens: int = Field(2000, ge=256, le=16000)
     base_url: str = ""  # optional: an Anthropic-compatible gateway or proxy
+
+
+class ArgoCDCfg(_M):
+    """Argo CD applications through its REST API (read-only). Create the token with `argocd account generate-token` for an
+    account (or project role) that may `get` applications."""
+    url: str = ""  # the Argo CD server, e.g. https://argocd.example.com (include the root path if you set one)
+    token: str = ""  # use ${ARGOCD_TOKEN}
+    verify_tls: bool = True
+    ca_file: str = ""
+    projects: list[str] = Field(default_factory=list)  # empty = every project the token can see
+
+    @field_validator("url")
+    @classmethod
+    def _url(cls, v: str) -> str:
+        if v and not re.match(r"^https?://[^\s]+$", v):
+            raise ValueError("must start with http:// or https://")
+        return v.rstrip("/")
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.url)
 
 
 class AzureCfg(_M):
@@ -408,6 +429,7 @@ class ServerCfg(_M):
     kubernetes: KubernetesCfg | None = None
     datadog: DatadogCfg | None = None
     azure: AzureCfg | None = None
+    argocd: ArgoCDCfg | None = None
 
     @field_validator("id")
     @classmethod
@@ -433,6 +455,7 @@ class ServerView:
     kubernetes: KubernetesCfg
     datadog: DatadogCfg
     azure: AzureCfg
+    argocd: ArgoCDCfg
 
 
 class Config(_M):
@@ -456,6 +479,7 @@ class Config(_M):
     kubernetes: KubernetesCfg = KubernetesCfg()
     datadog: DatadogCfg = DatadogCfg()
     azure: AzureCfg = AzureCfg()
+    argocd: ArgoCDCfg = ArgoCDCfg()
     digest: DigestCfg = DigestCfg()
     alerts: AlertsCfg = AlertsCfg()
     status_page: StatusPageCfg = StatusPageCfg()
@@ -476,7 +500,7 @@ class Config(_M):
         if not self.servers:
             env = self.app.environment
             return [ServerView("default", env or self.app.name, env, self.datasources, self.services, self.checks,
-                               self.github, self.grafana, self.sentry, self.cloudwatch, self.kubernetes, self.datadog, self.azure)]
+                               self.github, self.grafana, self.sentry, self.cloudwatch, self.kubernetes, self.datadog, self.azure, self.argocd)]
         return [
             ServerView(
                 s.id, s.name or s.id, s.environment or s.name or s.id,
@@ -490,6 +514,7 @@ class Config(_M):
                 s.kubernetes or self.kubernetes,
                 s.datadog or self.datadog,
                 s.azure or self.azure,
+                s.argocd or self.argocd,
             )
             for s in self.servers
         ]

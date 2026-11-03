@@ -52,3 +52,11 @@ test('a crash loop is one timeline line, and what-changed calls it a crash loop'
   assert.equal(out[0].tone, 'crit');
   assert.match(out[0].text, /api restarted 12 times in the hour before this alert started: it looks like a crash loop/);
 });
+
+test('Argo CD syncs read as syncs, not as generic deploys', () => {
+  const deploys = [{ source: 'argocd', name: 'web', sha: 'cafe123', conclusion: 'success', finished_at: 940 }];
+  const timeline = buildTimeline({ deploys });
+  assert.equal(timeline[0].title, 'Argo CD synced web cafe123');
+  const w = whatChanged({ incident: { started_at: 1000, labels: {} }, deploys });
+  assert.match(w[0].text, /^Argo CD synced web \(cafe123\) 1m before this alert started\.$/);
+});
