@@ -5,6 +5,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-03
+
+### Fixed
+- Nigrani crashed at startup (`FileNotFoundError` on the Kubernetes CA file) on platforms that run containers on Kubernetes without
+  mounting a service account, such as Render, because the `KUBERNETES_SERVICE_HOST` variable alone was taken to mean "running in a
+  cluster". In-cluster mode now needs the mounted service account token as well. A `kubernetes.ca_file` that does not exist is
+  reported as a configuration error naming the file.
+
 ## [0.4.0] - 2026-11-03
 
 ### Added

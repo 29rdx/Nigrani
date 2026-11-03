@@ -289,6 +289,15 @@ class DatadogCfg(_M):
         return bool(self.api_key and self.app_key)
 
 
+K8S_SA_DIR = Path("/var/run/secrets/kubernetes.io/serviceaccount")
+
+
+def in_cluster() -> bool:
+    """True inside a pod that has a service account mounted. The environment variable alone is not enough: platforms that
+    run containers on Kubernetes (Render, for one) set it without giving the container any credentials."""
+    return bool(os.environ.get("KUBERNETES_SERVICE_HOST")) and (K8S_SA_DIR / "token").is_file()
+
+
 class KubernetesCfg(_M):
     """A Kubernetes cluster (read-only). Inside a cluster, leave `url` empty: the pod's service account is used."""
     url: str = ""  # API server, e.g. https://10.0.0.1:6443; empty = Kubernetes not configured (unless running in a cluster)
@@ -306,7 +315,7 @@ class KubernetesCfg(_M):
 
     @property
     def enabled(self) -> bool:
-        return bool(self.url) or bool(os.environ.get("KUBERNETES_SERVICE_HOST"))
+        return bool(self.url) or in_cluster()
 
 
 class CloudWatchCfg(_M):

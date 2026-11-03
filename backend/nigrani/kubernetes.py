@@ -20,10 +20,10 @@ from typing import Any
 
 import httpx
 
-from .config import KubernetesCfg
+from . import config as config_mod
+from .config import ConfigError, KubernetesCfg
 from .prom import PromError, PromQueryError, PromUnavailable
 
-SA_DIR = Path("/var/run/secrets/kubernetes.io/serviceaccount")
 PAGE = 500
 BAD_WAITING = {"CrashLoopBackOff", "ImagePullBackOff", "ErrImagePull", "CreateContainerConfigError", "InvalidImageName",
                "CreateContainerError", "RunContainerError"}
@@ -108,10 +108,14 @@ def parse(expr: str) -> tuple[str, dict[str, str]]:
 class Kubernetes:
     def __init__(self, cfg: KubernetesCfg, timeout: float = 10.0, client: httpx.AsyncClient | None = None):
         self.cfg = cfg
-        in_cluster = not cfg.url and bool(os.environ.get("KUBERNETES_SERVICE_HOST"))
+        in_cluster = not cfg.url and config_mod.in_cluster()
         self.base = cfg.url or (f"https://{os.environ['KUBERNETES_SERVICE_HOST']}:{os.environ.get('KUBERNETES_SERVICE_PORT', '443')}"
                                 if in_cluster else "")
-        ca = cfg.ca_file or (str(SA_DIR / "ca.crt") if in_cluster else "")
+        ca = cfg.ca_file
+        if ca and not Path(ca).is_file():
+            raise ConfigError(f"kubernetes.ca_file not found: {ca}")
+        if not ca and in_cluster and (config_mod.K8S_SA_DIR / "ca.crt").is_file():
+            ca = str(config_mod.K8S_SA_DIR / "ca.crt")
         if client is None:
             verify: Any = False if not cfg.verify_tls else (ssl.create_default_context(cafile=ca) if ca else True)
             client = httpx.AsyncClient(timeout=timeout, verify=verify)
@@ -127,7 +131,7 @@ class Kubernetes:
             return self.cfg.token
         if self._in_cluster:
             try:
-                return (SA_DIR / "token").read_text().strip()
+                return (config_mod.K8S_SA_DIR / "token").read_text().strip()
             except OSError:
                 pass
         return ""

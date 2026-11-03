@@ -165,9 +165,20 @@ def test_certificate_problems_say_what_to_set():
         run(c.instant("crashloop"))
 
 
+def mount_service_account(monkeypatch, tmp_path, ca=False):
+    sa = tmp_path / "sa"
+    sa.mkdir()
+    (sa / "token").write_text("sa-token\n")
+    if ca:
+        (sa / "ca.crt").write_text("not a real certificate")
+    monkeypatch.setattr("nigrani.config.K8S_SA_DIR", sa)
+    return sa
+
+
 def test_in_cluster_defaults(monkeypatch, tmp_path):
     monkeypatch.setenv("KUBERNETES_SERVICE_HOST", "10.0.0.1")
     monkeypatch.setenv("KUBERNETES_SERVICE_PORT", "443")
+    mount_service_account(monkeypatch, tmp_path)
     cfg = KubernetesCfg()
     assert cfg.enabled
     k = Kubernetes(cfg, client=httpx.AsyncClient())
@@ -243,3 +254,33 @@ def test_the_kubernetes_preset_loads(tmp_path):
     for r in rules.values():
         assert r.datasource == "kubernetes"
         parse(r.expr)
+
+
+def test_the_environment_variable_alone_does_not_mean_in_cluster(monkeypatch, tmp_path):
+    """Render (and other platforms on Kubernetes) set KUBERNETES_SERVICE_HOST but mount no service account: Nigrani must
+    start normally, with Kubernetes simply not configured, instead of crashing on the missing CA file."""
+    monkeypatch.setenv("KUBERNETES_SERVICE_HOST", "10.0.0.1")
+    monkeypatch.setattr("nigrani.config.K8S_SA_DIR", tmp_path / "nothing-here")
+    assert not KubernetesCfg().enabled
+    from fastapi.testclient import TestClient
+    from nigrani.api import create_app
+    cfg = load_config(None)
+    cfg.data_dir, cfg.auth.password = str(tmp_path), "pw"
+    with TestClient(create_app(cfg, prom=FakeProm())) as c:
+        assert c.get("/api/health").status_code == 200
+        assert c.app.state.cfg.kubernetes.enabled is False
+
+
+def test_token_without_ca_still_starts_and_ca_is_used_when_present(monkeypatch, tmp_path):
+    monkeypatch.setenv("KUBERNETES_SERVICE_HOST", "10.0.0.1")
+    mount_service_account(monkeypatch, tmp_path)
+    assert KubernetesCfg().enabled
+    Kubernetes(KubernetesCfg())                              # no ca.crt in the mount: falls back to the system certificates
+    k = Kubernetes(KubernetesCfg(verify_tls=False))
+    assert k._token() == "sa-token"
+
+
+def test_a_missing_ca_file_is_a_clear_config_error(tmp_path):
+    from nigrani.config import ConfigError
+    with pytest.raises(ConfigError, match="ca_file not found: /nope/ca.crt"):
+        Kubernetes(KubernetesCfg(url="https://k8s.test", ca_file="/nope/ca.crt"))
