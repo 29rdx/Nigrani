@@ -9,6 +9,9 @@ Teams, Telegram, email, WhatsApp, Discord or a webhook when something breaks.
 [![Docker image](https://img.shields.io/badge/ghcr.io-nigrani-2496ed?logo=docker&logoColor=white)](https://github.com/nikhilrai-tech/Nigrani/pkgs/container/nigrani)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
+**[Live demo](https://nigrani-demo-nesu.onrender.com/)** (sample data, read-only, no login; it sleeps when idle, so the first load can take a minute) ·
+[Status page example](https://nigrani-demo-nesu.onrender.com/#/status)
+
 *Nigrani* (निगरानी) is Hindi for "watchful oversight".
 
 ```bash
