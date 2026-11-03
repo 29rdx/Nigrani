@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-03
+
 ### Added
 - **SLOs and burn-rate alerts** (`slos:` config): a target and window, an SLI from two PromQL expressions (`total` with `good` or `errors`) or
   from an uptime check, an SLOs page with the error budget left and the burn rate of every alert tier, and multi-window, multi-burn-rate alerts

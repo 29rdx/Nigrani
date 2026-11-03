@@ -3,7 +3,7 @@ name: nigrani
 description: Self-hosted monitoring and alerting dashboard on top of Prometheus and Loki, with Kubernetes, Argo CD, Sentry, Datadog, AWS and Azure alert sources.
 type: application
 version: 0.1.0
-appVersion: "0.4.1"
+appVersion: "0.5.0"
 kubeVersion: ">=1.23.0-0"
 home: https://github.com/nikhilrai-tech/Nigrani
 sources:
