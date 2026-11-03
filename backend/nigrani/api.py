@@ -27,11 +27,13 @@ from .cloudwatch import CloudWatch
 from .datadog import Datadog
 from .kubernetes import Kubernetes
 from .passwords import hash_password, password_problem
-from .checks import CheckRunner
+from .ai import Ai, AiError
+from .checks import CheckRunner, result_id
 from .config import Config, ConfigError, ServerView
 from .containers import _fresh, collect_containers, collect_host, container_signals, forget_container, safe_name
 from . import backup as backup_mod
 from . import grafana as grafana_links
+from .demo import DemoProm, seed_demo
 from .digest import DigestScheduler
 from .engine import Engine, classify
 from .format import build_event
@@ -89,6 +91,18 @@ class SilenceIn(BaseModel):
     reason: str = ""
 
 
+class AiRuleIn(BaseModel):
+    description: str = Field(min_length=3, max_length=600)
+
+
+class AnnouncementIn(BaseModel):
+    kind: Literal["incident", "maintenance", "info"] = "info"
+    title: str = Field(min_length=1, max_length=120)
+    body: str = Field("", max_length=2000)
+    starts_at: float | None = None      # default: now (a future time schedules it)
+    ends_at: float | None = None
+
+
 class LoginIn(BaseModel):
     username: str
     password: str
@@ -106,9 +120,10 @@ class Runtime:
 def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
                loki: "dict[str, Prom] | None" = None, sentry: "dict[str, Any] | None" = None,
                cloudwatch: "dict[str, Any] | None" = None, kubernetes: "dict[str, Any] | None" = None,
-               datadog: "dict[str, Any] | None" = None, azure: "dict[str, Any] | None" = None) -> FastAPI:
+               datadog: "dict[str, Any] | None" = None, azure: "dict[str, Any] | None" = None,
+               ai: "Ai | None" = None) -> FastAPI:
     allow_no_auth = os.environ.get("NIGRANI_ALLOW_NO_AUTH") == "1"
-    if not cfg.auth.password and not allow_no_auth:
+    if not cfg.auth.password and not allow_no_auth and not cfg.demo:
         raise ConfigError("auth.password is empty. Set NIGRANI_PASSWORD (NIGRANI_ALLOW_NO_AUTH=1 is for local dev only).")
 
     store = Store(str(Path(cfg.data_dir) / "nigrani.db"))
@@ -117,8 +132,11 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
         proms = prom
     elif prom is not None:
         proms = {views[0].id: prom}
+    elif cfg.demo:
+        proms = {v.id: DemoProm() for v in views}
     else:
         proms = {v.id: Prom(v.datasources.prometheus, v.datasources.timeout) for v in views}
+    ai_client = ai if ai is not None else (Ai(cfg.ai, demo=cfg.demo and not cfg.ai.api_key) if (cfg.ai.enabled or cfg.demo) else None)
     notifier = Notifier(store, cfg.app.timezone)
     # Loki answers metric LogQL (rate / count_over_time) in the same shape as Prometheus, under /loki, so the same
     # client serves log-based alert rules.
@@ -174,6 +192,8 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
                 store.save_rule({**r, "enabled": False})
         for c in cfg.channels:
             store.seed_channel(c.model_dump())
+        if cfg.demo:
+            seed_demo(store, views)
 
     async def containers_loop(rt: Runtime) -> None:
         while True:
@@ -222,6 +242,16 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
             resp.headers.setdefault("Cache-Control", "no-store")
         return resp
 
+    DEMO_WRITES_OK = re.compile(r"^/api/(login|logout|rules/test|channels/preview|ai/rule|incidents/\d+/explain)$")
+
+    @app.middleware("http")
+    async def demo_read_only(request: Request, call_next):
+        """The demo can be hosted publicly: nobody may change it (or make it send anything)."""
+        if cfg.demo and request.method not in ("GET", "HEAD", "OPTIONS") and request.url.path.startswith("/api/") \
+                and not DEMO_WRITES_OK.match(request.url.path):
+            return JSONResponse({"detail": "This is a read-only demo. Run your own Nigrani to change things."}, status_code=403)
+        return await call_next(request)
+
     AUDIT_LABELS = [
         ("POST", r"^/api/rules$", "rule.create"), ("PUT", r"^/api/rules/[^/]+$", "rule.update"),
         ("DELETE", r"^/api/rules/[^/]+$", "rule.delete"), ("POST", r"^/api/channels$", "channel.save"),
@@ -232,6 +262,9 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
         ("POST", r"^/api/backup/import$", "backup.import"), ("POST", r"^/api/users$", "user.create"),
         ("PUT", r"^/api/users/\d+$", "user.update"), ("DELETE", r"^/api/users/\d+$", "user.delete"),
         ("DELETE", r"^/api/containers/.+$", "container.forget"),
+        ("POST", r"^/api/incidents/\d+/explain$", "ai.explain"), ("POST", r"^/api/ai/rule$", "ai.rule"),
+        ("POST", r"^/api/announcements$", "announcement.create"), ("POST", r"^/api/announcements/\d+/resolve$", "announcement.resolve"),
+        ("DELETE", r"^/api/announcements/\d+$", "announcement.delete"),
     ]
     NOT_AUDITED = {"/api/rules/test", "/api/channels/preview", "/api/login", "/api/logout"}
 
@@ -288,7 +321,7 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
         return {
             "user": who.username, "name": who.name, "role": who.role, "provider": who.provider,
             "can": {"edit": who.can("editor"), "admin": who.can("admin")}, "app": cfg.app.name, "environment": cfg.app.environment, "version": __version__,
-            "default_server": default_id,
+            "default_server": default_id, "ai": ai_client is not None, "demo": cfg.demo,
             "servers": [{"id": rt.view.id, "name": rt.view.name, "environment": rt.view.environment,
                          "logs": bool(rt.view.datasources.loki), "deploys": rt.github.enabled,
                          "grafana": bool(rt.view.grafana.url), "sentry": rt.view.id in sentries, "kubernetes": rt.view.id in kubes, "datadog": rt.view.id in dogs,
@@ -359,26 +392,77 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
         resp.delete_cookie(SSO_COOKIE)
         return resp
 
+    def _announcement(a: dict[str, Any], now: float) -> dict[str, Any]:
+        state = "resolved" if a["resolved_at"] else "scheduled" if a["starts_at"] > now else \
+            "completed" if a["ends_at"] and a["ends_at"] < now else "active"
+        return {"id": a["id"], "kind": a["kind"], "title": a["title"], "body": a["body"], "state": state,
+                "starts_at": a["starts_at"], "ends_at": a["ends_at"], "resolved_at": a["resolved_at"]}
+
+    def _day_bars(rid: str, days: int, now: float) -> list[dict[str, Any]]:
+        """One entry per UTC day, oldest first: uptime % that day, or None when nothing was checked."""
+        have = {d["day"]: d for d in store.check_days(rid, now - days * 86400)}
+        out = []
+        for n in range(days - 1, -1, -1):
+            day = time.strftime("%Y-%m-%d", time.gmtime(now - n * 86400))
+            d = have.get(day)
+            out.append({"day": day, "pct": (d["up"] / d["total"] * 100) if d and d["total"] else None})
+        return out
+
     @api.get("/public/status")
     async def public_status() -> dict[str, Any]:
         if not cfg.status_page.enabled:
             raise HTTPException(404, "status page disabled")
+        now = time.time()
         multi = len(runtimes) > 1
+        days = cfg.status_page.days
         check_rows = []
         for rt in runtimes.values():
             for c in rt.checks.summary():
                 name = f"{rt.view.name} · {c['name']}" if multi else c["name"]
-                check_rows.append({"name": name, "ok": c["ok"], "uptime_30d": c["uptime_30d"]})
+                bars = _day_bars(result_id(rt.view.id, c["id"]), days, now)
+                known = [b["pct"] for b in bars if b["pct"] is not None]
+                check_rows.append({"name": name, "ok": c["ok"], "uptime_30d": c["uptime_30d"], "days": bars,
+                                   "uptime_period": (sum(known) / len(known)) if known else None})
         # Only uptime-check incidents are public: internal rule names (disks, containers...) stay private.
-        public = [i for i in store.recent_incidents(100, time.time() - 7 * 86400) if i["source_id"].startswith("check:")]
+        public = [i for i in store.recent_incidents(100, now - 7 * 86400) if i["source_id"].startswith("check:")]
+        notes = [_announcement(a, now) for a in store.list_announcements(now - 7 * 86400)]
         failing = [c for c in check_rows if c["ok"] is False]
+        maintenance = any(n["kind"] == "maintenance" and n["state"] == "active" for n in notes)
         return {
-            "title": cfg.status_page.title, "name": cfg.app.name,
-            "status": "major" if failing else "operational",
+            "title": cfg.status_page.title, "name": cfg.app.name, "period_days": days,
+            "status": "major" if failing else "maintenance" if maintenance else "operational",
             "checks": check_rows,
+            "announcements": [n for n in notes if n["state"] != "completed" or n["resolved_at"] is None],
             "incidents": [{"rule": i["rule_name"].removeprefix("Check failing: "), "severity": i["severity"],
                            "started_at": i["started_at"], "resolved_at": i["resolved_at"]} for i in public[:20]],
         }
+
+    @secured.get("/announcements")
+    async def list_announcements() -> list[dict[str, Any]]:
+        now = time.time()
+        return [_announcement(a, now) for a in store.list_announcements(now - 7 * 86400)]
+
+    @secured.post("/announcements")
+    async def add_announcement(body: AnnouncementIn, who: Identity = Depends(authorize)) -> dict[str, Any]:
+        now = time.time()
+        start = body.starts_at if body.starts_at is not None else now
+        if body.ends_at is not None and body.ends_at <= start:
+            raise HTTPException(422, "ends_at must be after starts_at")
+        aid = store.add_announcement(kind=body.kind, title=body.title.strip(), body=body.body.strip(), starts_at=start,
+                                     ends_at=body.ends_at, by=who.username, now=now)
+        return _announcement(store.get_announcement(aid) or {}, now)
+
+    @secured.post("/announcements/{announcement_id}/resolve")
+    async def resolve_announcement(announcement_id: int) -> dict[str, Any]:
+        if not store.get_announcement(announcement_id):
+            raise HTTPException(404, "unknown announcement")
+        store.resolve_announcement(announcement_id, time.time())
+        return _announcement(store.get_announcement(announcement_id) or {}, time.time())
+
+    @secured.delete("/announcements/{announcement_id}")
+    async def delete_announcement(announcement_id: int) -> dict[str, bool]:
+        store.delete_announcement(announcement_id)
+        return {"ok": True}
 
     # ---------------- overview ----------------
     async def _overview(rt: Runtime) -> dict[str, Any]:
@@ -708,6 +792,63 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
         if inc is None:
             raise HTTPException(409, "only a firing incident can be un-acknowledged")
         return inc
+
+    # ---------------- AI assistant (optional) ----------------
+    def _need_ai() -> Ai:
+        if ai_client is None:
+            raise HTTPException(404, "the AI assistant is not enabled (set ai.enabled and ai.api_key)")
+        return ai_client
+
+    @secured.get("/incidents/{incident_id}/explain")
+    async def get_explanation(incident_id: int) -> dict[str, Any]:
+        """The saved explanation, if someone already asked for one: viewers can read it without spending anything."""
+        _need_ai()
+        return store.kv_get(f"ai:incident:{incident_id}") or {"text": None}
+
+    @secured.post("/incidents/{incident_id}/explain")
+    async def explain_incident(incident_id: int, refresh: bool = False) -> dict[str, Any]:
+        client = _need_ai()
+        saved = store.kv_get(f"ai:incident:{incident_id}")
+        if saved and not refresh:
+            return saved
+        detail = await incident_detail(incident_id)
+        try:
+            out = await client.explain(detail)
+        except AiError as e:
+            raise HTTPException(502, str(e)) from e
+        store.kv_set(f"ai:incident:{incident_id}", out)
+        return out
+
+    @secured.post("/ai/rule")
+    async def ai_rule(body: AiRuleIn, rt: Runtime = Depends(srv)) -> dict[str, Any]:
+        """Turn a sentence into a draft rule, checked against the real data. Nothing is saved."""
+        client = _need_ai()
+        try:
+            names = await rt.prom.metric_names()
+        except (PromError, AttributeError):
+            names = []
+        try:
+            draft = await client.draft_rule(body.description.strip(), names)
+        except AiError as e:
+            raise HTTPException(502, str(e)) from e
+        try:
+            rule = RuleIn(**{**draft, "datasource": "prometheus"})
+        except Exception as e:  # noqa: BLE001 pydantic ValidationError: the model's draft broke the rule schema
+            raise HTTPException(502, f"the model's draft is not a valid rule: {e}") from e
+        problem = rule_problem(rule)
+        preview: dict[str, Any] = {"count": None, "series": [], "error": None}
+        try:
+            res = await rt.prom.instant(rule.expr)
+            rows = []
+            for s_ in res[:20]:
+                if s_["value"] is not None:
+                    sev, _ = classify(s_["value"], rule.direction, rule.warn, rule.crit)
+                    rows.append({"series": series_label(s_["labels"]), "value": s_["value"], "severity": sev})
+            preview.update(count=len(res), series=rows)
+        except PromError as e:
+            # a fixed message: the details are one click away (Preview in the editor) and need not travel in this response
+            preview["error"] = "Prometheus is not reachable" if isinstance(e, PromUnavailable) else "Prometheus rejected this query"
+        return {"rule": rule.model_dump(exclude={"id", "datasource", "servers", "enabled"}), "problem": problem, "preview": preview}
 
     # ---------------- users and audit log (admin) ----------------
     def _admin_count(excluding: int | None = None) -> int:

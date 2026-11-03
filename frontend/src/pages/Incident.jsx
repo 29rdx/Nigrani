@@ -5,6 +5,7 @@ import { Badge, Card, Empty, ErrorNote, Icon, Seg, SevBadge } from '../component
 import { useApp } from '../ctx';
 import { fmtAgo, fmtClock, fmtDateTime, fmtDuration, fmtValue } from '../format';
 import { buildTimeline, whatChanged } from '../incident';
+import AiExplain from '../components/AiExplain';
 import { ExploreButton } from '../components/Grafana';
 import { AckModal } from './Alerts';
 import { IssueTable } from './Sentry';
@@ -161,6 +162,7 @@ export default function Incident({ id }) {
     <div className="stack">
       <div><a href="#/alerts/active">← Alerts</a></div>
       <Header d={d} reload={reload} />
+      <AiExplain id={id} />
       <Changed d={d} />
       {d.chart && (
         <Card title={d.chart.name} sub="dashed lines: thresholds, deploys, restarts and when it fired">

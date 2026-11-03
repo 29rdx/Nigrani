@@ -225,6 +225,20 @@ class AlertsCfg(_M):
 class StatusPageCfg(_M):
     enabled: bool = False
     title: str = "System status"
+    days: int = Field(90, ge=7, le=365)  # how many days of daily uptime the page shows
+
+
+class AiCfg(_M):
+    """Optional assistant that explains incidents and drafts alert rules with the Anthropic API.
+
+    Off by default. When on, the data of the incident you ask about (metric values, container stats, alert names) is
+    sent to Anthropic; nothing is sent in the background."""
+    enabled: bool = False
+    api_key: str = ""  # use ${ANTHROPIC_API_KEY}
+    model: str = "claude-opus-5-5"
+    effort: Literal["low", "medium", "high"] = "low"  # how hard the model thinks: higher is slower and costs more
+    max_tokens: int = Field(2000, ge=256, le=16000)
+    base_url: str = ""  # optional: an Anthropic-compatible gateway or proxy
 
 
 class AzureCfg(_M):
@@ -436,9 +450,17 @@ class Config(_M):
     digest: DigestCfg = DigestCfg()
     alerts: AlertsCfg = AlertsCfg()
     status_page: StatusPageCfg = StatusPageCfg()
+    ai: AiCfg = AiCfg()
+    demo: bool = False  # sample data and a read-only UI, for trying Nigrani without Prometheus (NIGRANI_DEMO=1)
     disable: dict[str, list[str]] = Field(default_factory=dict)  # {tiles|pages|rules: [ids]}
     data_dir: str = "/data"
     retention_days: int = 35
+
+    @model_validator(mode="after")
+    def _ai_needs_key(self) -> "Config":
+        if self.ai.enabled and not self.ai.api_key and not self.demo:
+            raise ValueError("ai.enabled needs ai.api_key (use api_key: ${ANTHROPIC_API_KEY})")
+        return self
 
     def server_views(self) -> list[ServerView]:
         """Without `servers:` there is one implicit server built from the top-level settings."""
@@ -490,14 +512,40 @@ def _subst(cfg: Config) -> None:
                 q.expr = sub(q.expr)
 
 
-def load_config(path: str | None = None, *, explicit: bool = False) -> Config:
+def demo_defaults() -> dict[str, Any]:
+    """What demo mode (NIGRANI_DEMO=1) sets up unless your config file says otherwise."""
+    port = os.environ.get("NIGRANI_PORT", "8080")
+    return {
+        "app": {"name": "Nigrani", "environment": "demo"},
+        "presets": ["core", "django"],
+        "services": [
+            {"name": "api", "container": "api", "group": "App"},
+            {"name": "worker", "container": "worker", "group": "App"},
+            {"name": "nginx", "container": "nginx", "group": "App"},
+            {"name": "redis", "container": "redis", "group": "Data"},
+            {"name": "postgres", "container": "postgres", "group": "Data"},
+        ],
+        # Nigrani checks itself, so the uptime page and the status page have real checks without any outside network.
+        "checks": [
+            {"id": "web", "name": "Web app", "type": "http", "target": f"http://127.0.0.1:{port}/api/health", "interval": 30},
+            {"id": "api", "name": "API", "type": "http", "target": f"http://127.0.0.1:{port}/api/health", "interval": 30},
+            {"id": "database", "name": "Database", "type": "tcp", "target": f"127.0.0.1:{port}", "interval": 30},
+        ],
+        "status_page": {"enabled": True, "title": "Acme status"},
+        "demo": True,
+    }
+
+
+def load_config(path: str | None = None, *, explicit: bool = False, demo: bool = False) -> Config:
     raw: dict[str, Any] = {}
     if path and Path(path).is_file():
         raw = yaml.safe_load(Path(path).read_text()) or {}
-    elif explicit:
+    elif explicit and not demo:
         raise ConfigError(f"config file not found: {path}")
     if not isinstance(raw, dict):
         raise ConfigError("config root must be a mapping")
+    if demo:
+        raw = {**demo_defaults(), **raw, "demo": True}
 
     # channel settings keep their ${VAR} references literally; they are expanded at send time
     channels = raw.pop("channels", [])

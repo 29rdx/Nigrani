@@ -146,6 +146,15 @@ alerts:
 status_page:
   enabled: false                 # public, login-free page at /#/status (service names + uptime only)
   title: System status
+  days: 90                       # days of daily uptime bars (7-365)
+
+# Optional AI assistant: "Explain this incident" and "describe a rule in plain English". Needs an Anthropic API key.
+# Nothing is sent until someone presses one of those buttons; see the README for exactly what is sent.
+# ai:
+#   enabled: true
+#   api_key: ${ANTHROPIC_API_KEY}
+#   model: claude-opus-5-5
+#   effort: low                  # low | medium | high
 
 # ---- Customising ------------------------------------------------------------------------------------------
 

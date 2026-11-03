@@ -131,6 +131,7 @@ function Layout({ me, onLogout, toggleTheme, setRange }) {
 
   return (
     <>
+      {me.demo && <div className="demo-bar" role="note"><Icon name="sparkle" size={14} /> Demo: sample data, read-only. <a href="https://github.com/nikhilrai-tech/Nigrani#readme" target="_blank" rel="noopener noreferrer">Run your own in one command</a></div>}
       <div className="app">
         <aside className={`side ${open ? 'open' : ''}`}>
           <div className="brand"><Icon name="activity" size={22} />{me.app}</div>

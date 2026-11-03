@@ -29,7 +29,8 @@ def build() -> "object":
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)  # one INFO line per PromQL query is too noisy
     path = os.environ.get("NIGRANI_CONFIG", "/config/nigrani.yaml")
-    cfg = apply_env_overrides(load_config(path, explicit="NIGRANI_CONFIG" in os.environ))
+    demo = os.environ.get("NIGRANI_DEMO", "").lower() in ("1", "true", "yes")
+    cfg = apply_env_overrides(load_config(path, explicit="NIGRANI_CONFIG" in os.environ, demo=demo))
     return create_app(cfg)
 
 

@@ -83,6 +83,8 @@ class CheckRunner:
         await self.engine.sync_external("check:", sigs, server=self.server.id)
 
     async def run(self) -> None:
+        if self.cfg.demo:
+            await asyncio.sleep(3)        # the demo's checks look at Nigrani itself: let the server start listening first
         while True:
             try:
                 await self.run_once()

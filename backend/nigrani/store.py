@@ -59,6 +59,15 @@ CREATE TABLE IF NOT EXISTS audit (
 );
 CREATE INDEX IF NOT EXISTS ix_audit_ts ON audit(ts);
 CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS check_daily (
+  check_id TEXT NOT NULL, day TEXT NOT NULL, up INTEGER NOT NULL DEFAULT 0, total INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (check_id, day)
+);
+CREATE TABLE IF NOT EXISTS announcements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL DEFAULT 'info', title TEXT NOT NULL,
+  body TEXT NOT NULL DEFAULT '', starts_at REAL NOT NULL, ends_at REAL, resolved_at REAL,
+  created_by TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL
+);
 """
 
 
@@ -95,6 +104,11 @@ class Store:
             for name, ddl in cols:
                 if name not in have:
                     self._db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+        # daily uptime totals (they outlive the raw check results) for databases that only have the raw rows
+        if not self._db.execute("SELECT 1 FROM check_daily LIMIT 1").fetchone():
+            self._db.execute(
+                "INSERT INTO check_daily(check_id, day, up, total) SELECT check_id, date(ts, 'unixepoch'), SUM(ok), COUNT(*) "
+                "FROM check_results GROUP BY check_id, date(ts, 'unixepoch')")
 
     def _q(self, sql: str, args: tuple = ()) -> list[sqlite3.Row]:
         with self._lock:
@@ -369,6 +383,40 @@ class Store:
     def add_check_result(self, check_id: str, ts: float, ok: bool, latency_ms: float | None, detail: str) -> None:
         self._x("INSERT INTO check_results(check_id,ts,ok,latency_ms,detail) VALUES(?,?,?,?,?)",
                 (check_id, ts, int(ok), latency_ms, detail))
+        self.add_check_day(check_id, ts, int(ok), 1)
+
+    def add_check_day(self, check_id: str, ts: float, up: int, total: int) -> None:
+        """Add to the UTC day's totals. These are kept for 400 days, so the status page can show a long history."""
+        self._x("INSERT INTO check_daily(check_id, day, up, total) VALUES(?, date(?, 'unixepoch'), ?, ?) "
+                "ON CONFLICT(check_id, day) DO UPDATE SET up = up + excluded.up, total = total + excluded.total",
+                (check_id, ts, up, total))
+
+    def check_days(self, check_id: str, since: float) -> list[dict[str, Any]]:
+        rows = self._q("SELECT day, up, total FROM check_daily WHERE check_id=? AND day >= date(?, 'unixepoch') ORDER BY day",
+                       (check_id, since))
+        return [dict(r) for r in rows]
+
+    # ---- status page announcements ----
+    def add_announcement(self, *, kind: str, title: str, body: str, starts_at: float, ends_at: float | None,
+                         by: str, now: float) -> int:
+        return self._x("INSERT INTO announcements(kind,title,body,starts_at,ends_at,created_by,created_at) VALUES(?,?,?,?,?,?,?)",
+                       (kind, title, body, starts_at, ends_at, by, now))
+
+    def get_announcement(self, announcement_id: int) -> dict[str, Any] | None:
+        rows = self._q("SELECT * FROM announcements WHERE id=?", (announcement_id,))
+        return dict(rows[0]) if rows else None
+
+    def list_announcements(self, since: float, limit: int = 50) -> list[dict[str, Any]]:
+        """Everything still relevant: unresolved, or resolved after `since`. Newest first."""
+        rows = self._q("SELECT * FROM announcements WHERE resolved_at IS NULL OR resolved_at >= ? ORDER BY starts_at DESC LIMIT ?",
+                       (since, limit))
+        return [dict(r) for r in rows]
+
+    def resolve_announcement(self, announcement_id: int, now: float) -> None:
+        self._x("UPDATE announcements SET resolved_at=? WHERE id=? AND resolved_at IS NULL", (now, announcement_id))
+
+    def delete_announcement(self, announcement_id: int) -> None:
+        self._x("DELETE FROM announcements WHERE id=?", (announcement_id,))
 
     def check_uptime(self, check_id: str, since: float) -> tuple[int, int]:
         r = self._q("SELECT COALESCE(SUM(ok),0) AS up, COUNT(*) AS n FROM check_results WHERE check_id=? AND ts>=?",
@@ -387,6 +435,8 @@ class Store:
     def prune(self, retention_days: int) -> None:
         cutoff = time.time() - retention_days * 86400
         self._x("DELETE FROM check_results WHERE ts < ?", (cutoff,))
+        self._x("DELETE FROM check_daily WHERE day < date(?, 'unixepoch')", (time.time() - 400 * 86400,))
+        self._x("DELETE FROM announcements WHERE resolved_at IS NOT NULL AND resolved_at < ?", (cutoff,))
         self._x("DELETE FROM incidents WHERE status='resolved' AND resolved_at < ?", (cutoff,))
         self._x("DELETE FROM silences WHERE until < ?", (time.time() - 86400,))
         self._x("DELETE FROM incident_events WHERE incident_id NOT IN (SELECT id FROM incidents)")

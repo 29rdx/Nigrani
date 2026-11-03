@@ -18,6 +18,13 @@ docker run -d --name nigrani -p 8080:8080 \
 # open http://localhost:8080   (no Prometheus yet? see "Try it in two minutes" below)
 ```
 
+Just want to look around first? Demo mode needs no Prometheus and no login: it runs on sample data (with alerts that
+fire and resolve on their own) and is read-only.
+
+```bash
+docker run --rm -p 8080:8080 -e NIGRANI_DEMO=1 ghcr.io/nikhilrai-tech/nigrani:latest
+```
+
 ![Overview](docs/screenshots/overview-dark.png)
 
 ## Why
@@ -57,7 +64,10 @@ silently stops. Nigrani answers the operational questions directly:
 | **Incident page** | Click any alert for everything around it: lifecycle timeline, the metric with thresholds, the container's CPU/memory and logs, deploys and restarts just before it started, and other alerts that fired at the same time ("What changed?") |
 | **Alerts** | Rules editable in the UI (thresholds, duration, PromQL with live preview), silences, and an **incident timeline** showing when each alert started, how long it lasted and what its peak was |
 | **Integrations** | Slack, Teams, Discord, Telegram, Email, WhatsApp (Twilio), signed webhook. Per-channel severity + quiet hours, "send test" button |
-| **Uptime** | HTTP / TCP / TLS-certificate-expiry checks with 30-day uptime and an optional public status page |
+| **Uptime** | HTTP / TCP / TLS-certificate-expiry checks with 30-day uptime |
+| **Status page** | A public, login-free page with 90 days of daily uptime per service, and updates you post (incidents, planned maintenance, notices) |
+| **AI assistant** *(optional)* | "Explain this incident" (what happened, likely cause, what to check) and "describe a rule in plain English", with your own Anthropic API key. Off by default |
+| **Demo mode** | `NIGRANI_DEMO=1`: sample data and a read-only UI, to try or show Nigrani without any monitoring stack |
 | **Deploys** | GitHub Actions runs (pull-request and Dependabot runs are ignored), shown as dashed markers on charts |
 | **Digest** | A daily or weekly summary message |
 | **Users and roles** | Several people with viewer / editor / admin roles, password or single sign-on (Google, Microsoft, Okta, Keycloak... any OpenID Connect provider), and an audit log of sign-ins and changes |
@@ -469,6 +479,68 @@ grafana:
   `{to}` (milliseconds) are URL-encoded; a link that needs a value the place doesn't have (a container on the host
   page) is left out. Relative URLs are joined to `grafana.url`.
 - With `servers:` each server can have its own `grafana:` block.
+
+## Status page
+
+![Status page](docs/screenshots/status-page.png)
+
+A public page for your users, at `/#/status`, with no login. It shows each uptime check with **90 days of daily uptime**
+(one bar per day: green, amber for a few failed checks, red for an outage), the last 7 days of check incidents, and the
+updates you post. Internal alert names never appear on it.
+
+```yaml
+status_page:
+  enabled: true
+  title: Acme status
+  days: 90                       # 7-365
+```
+
+Post an update from **Uptime → Status page updates** (editors and admins): an *incident* you are working on, *planned
+maintenance* with a start and end (it shows as scheduled until it begins, and the banner reads "Scheduled maintenance"
+while it runs), or a plain *notice*. Mark it resolved when it is over. The same data is available as JSON at
+`/api/public/status`.
+
+## AI assistant
+
+![AI explanation of an incident](docs/screenshots/ai-explain.png)
+
+Optional, off by default. With an [Anthropic API key](https://console.anthropic.com/) Nigrani can:
+
+- **Explain an incident.** The incident page gets an *Explain this incident* button. The answer has three parts: what
+  happened (with the numbers), the likely cause, and what to check next. It is saved, so opening the page again costs
+  nothing; *Regenerate* asks again.
+- **Draft a rule from a sentence.** In *New alert rule*, type "tell me when the disk is more than 85% full" and press
+  *Draft*. The form is filled in, the query is run against your Prometheus so you see its current value, and nothing is
+  saved until you press Save.
+
+```yaml
+ai:
+  enabled: true
+  api_key: ${ANTHROPIC_API_KEY}
+  model: claude-opus-5-5         # any Anthropic model id
+  effort: low                    # low | medium | high: higher thinks longer and costs more
+```
+
+Nothing is sent in the background. A request goes out only when someone presses one of those buttons, and it carries the
+data of that incident (metric values, container CPU and memory, restarts, deploys, related alert names, Sentry issue
+titles) or the sentence typed for the rule, plus your Prometheus metric names for rule drafts. Only editors and admins
+can press the buttons; viewers can read an explanation that already exists. Everything the model reads is treated as
+untrusted data, its answer is shown as plain text, and a drafted rule is validated like any other before you can save it.
+Calls are logged in the audit log (`ai.explain`, `ai.rule`).
+
+## Demo mode
+
+```bash
+docker run --rm -p 8080:8080 -e NIGRANI_DEMO=1 ghcr.io/nikhilrai-tech/nigrani:latest
+```
+
+Open `http://localhost:8080`. There is no login. Instead of Prometheus, Nigrani generates believable sample data for the
+`core` and `django` presets (a host, five containers, a web app), starts with a few finished incidents and 90 days of
+uptime history, and every 90 minutes a 15 minute bad spell makes the sample app throw 5xx errors and slow down, so
+alerts really fire and resolve. The AI buttons work with a labelled, canned example. The UI is read-only: nothing can be
+created, changed or sent, so it is safe to host publicly as a live demo.
+
+Settings in a config file you mount (`NIGRANI_CONFIG`) still apply on top, for example `app.name` or `status_page`.
 
 ## Backup and restore
 

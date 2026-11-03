@@ -88,6 +88,10 @@ class Prom:
             return False
         return bool(r) and (r[0]["value"] or 0) > 0
 
+    async def metric_names(self) -> list[str]:
+        data = await self._get("/api/v1/label/__name__/values", {})
+        return [n for n in data if isinstance(n, str)]
+
     async def healthy(self) -> bool:
         try:
             await self.instant("vector(1)")

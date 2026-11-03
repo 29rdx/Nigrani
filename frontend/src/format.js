@@ -51,3 +51,9 @@ export function lsGet(key, fallback) {
 export function lsSet(key, value) {
   try { localStorage.setItem(key, value); } catch { /* storage may be blocked */ }
 }
+
+/** Status page day bar: green all good, amber a few failed checks, red a real outage, grey nothing recorded. */
+export function dayClass(pct) {
+  if (pct == null) return 'none';
+  return pct >= 99.9 ? 'ok' : pct >= 99 ? 'warn' : 'bad';
+}

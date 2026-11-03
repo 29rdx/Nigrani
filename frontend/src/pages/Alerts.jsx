@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api, useApi } from '../api';
 import { ExploreButton } from '../components/Grafana';
 import { useApp } from '../ctx';
-import { Badge, Card, Empty, ErrorNote, Modal, Seg, SevBadge, Toggle } from '../components/ui';
+import { Badge, Card, Empty, ErrorNote, Icon, Modal, Seg, SevBadge, Toggle } from '../components/ui';
 import { fmtAgo, fmtDateTime, fmtDuration, fmtValue } from '../format';
 
 const SOURCE_LABEL = { prometheus: 'Prometheus (metrics, PromQL)', loki: 'Loki (logs, LogQL)', sentry: 'Sentry (errors, issue search)', cloudwatch: 'AWS CloudWatch (metrics)', kubernetes: 'Kubernetes (pods, nodes, deployments)', datadog: 'Datadog (metrics)', azure: 'Azure Monitor (metrics)' };
@@ -23,19 +23,33 @@ function ServerTag({ id }) {
 }
 
 export function RuleModal({ rule, initial, onClose, onSaved }) {
-  const { servers, multi } = useApp();
+  const { servers, multi, me } = useApp();
   const sources = [...new Set(servers.flatMap((s) => s.datasources || ['prometheus']))];
   const [f, setF] = useState(rule ? { ...rule, warn: rule.warn ?? '', crit: rule.crit ?? '' } : { ...BLANK, ...initial });
   const [scope, setScope] = useState((rule?.servers || []).join(', '));
   const [err, setErr] = useState(null);
   const [preview, setPreview] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [ask, setAsk] = useState('');
+  const [drafted, setDrafted] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'number' ? e.target.value : e.target.value });
   const payload = () => ({ ...f, warn: num(f.warn), crit: num(f.crit), for_seconds: Number(f.for_seconds), servers: splitIds(scope) });
 
   const test = async () => {
     setErr(null); setBusy(true);
     try { setPreview(await api('/rules/test', { method: 'POST', body: payload() })); } catch (e) { setErr(e.message); setPreview(null); }
+    setBusy(false);
+  };
+  const draft = async () => {
+    setErr(null); setBusy(true);
+    try {
+      const r = await api('/ai/rule', { method: 'POST', body: { description: ask } });
+      setF({ ...f, ...r.rule, datasource: 'prometheus', warn: r.rule.warn ?? '', crit: r.rule.crit ?? '' });
+      setPreview(r.preview.error ? null : r.preview);
+      setDrafted(true);
+      if (r.problem) setErr(`The draft needs a fix: ${r.problem}.`);
+      else if (r.preview.error) setErr(`The draft's query failed: ${r.preview.error}`);
+    } catch (e) { setErr(e.message); }
     setBusy(false);
   };
   const save = async () => {
@@ -54,6 +68,17 @@ export function RuleModal({ rule, initial, onClose, onSaved }) {
       <button className="btn" onClick={test} disabled={busy || !f.expr}>Preview</button>
       <button className="btn primary" onClick={save} disabled={busy || !f.name || !f.expr}>Save</button>
     </>}>
+      {me.ai && !rule && f.datasource === 'prometheus' && (
+        <div className="ai-box">
+          <label className="f" htmlFor="r-ai"><Icon name="sparkle" size={14} /> Describe it in plain English</label>
+          <div className="row">
+            <input id="r-ai" type="text" value={ask} onChange={(e) => setAsk(e.target.value)} placeholder="e.g. tell me when the disk is more than 85% full"
+              onKeyDown={(e) => { if (e.key === 'Enter' && ask.trim().length > 2 && !busy) draft(); }} />
+            <button className="btn" onClick={draft} disabled={busy || ask.trim().length < 3}>{busy ? 'Drafting…' : 'Draft'}</button>
+          </div>
+          {drafted && <div className="hint">AI draft, filled in below. Read the query and the preview before you save.</div>}
+        </div>
+      )}
       <label className="f" htmlFor="r-name">Name</label>
       <input id="r-name" type="text" value={f.name} onChange={set('name')} autoFocus />
       {(sources.length > 1 || f.datasource !== 'prometheus') && (

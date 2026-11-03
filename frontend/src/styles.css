@@ -217,3 +217,25 @@ table.t tr.click:hover td { background: var(--surface-2); }
   .top .seg { order: 5; width: 100%; } .top .seg button { flex: 1; }
   .banner { flex-wrap: wrap; } .banner .chips { margin-left: 0; }
 }
+
+/* AI assistant */
+.ai-text h4 { margin: 14px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.ai-text h4:first-child { margin-top: 0; }
+.ai-text p { margin: 0 0 6px; line-height: 1.55; }
+.ai-text .li { display: flex; gap: 8px; margin: 3px 0; line-height: 1.5; }
+.ai-box { border: 1px dashed var(--border); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 14px; }
+.ai-box .row input { flex: 1; }
+/* demo banner */
+.demo-bar { background: var(--surface-2); color: var(--text); border-bottom: 1px solid var(--border); padding: 6px 16px; font-size: 13px; text-align: center; }
+.demo-bar a { margin-left: 6px; font-weight: 600; }
+/* status page */
+.banner.maintenance { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+.svc { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.svc:last-child { border-bottom: 0; }
+.daybars { display: flex; gap: 2px; height: 28px; margin-top: 10px; }
+.daybars i { flex: 1; border-radius: 2px; min-width: 2px; background: var(--border); }
+.daybars i.ok { background: var(--ok); }
+.daybars i.warn { background: var(--warn); }
+.daybars i.bad { background: var(--crit); }
+.daybars i:hover { opacity: .7; }
+.daylegend { display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px; }

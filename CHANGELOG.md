@@ -6,7 +6,22 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Demo mode** (`NIGRANI_DEMO=1`): sample data in place of Prometheus, a few finished incidents and 90 days of uptime history,
+  and a bad spell every 90 minutes so alerts fire and resolve for real. No login; the UI is read-only, so it can be hosted
+  publicly.
+- **AI assistant** (optional, `ai:` config, uses the Anthropic API): *Explain this incident* on the incident page (saved, so it
+  costs nothing to reopen) and *Draft* in the new-rule form, which turns a sentence into a rule checked against your
+  Prometheus. Off by default; editors and admins only; recorded in the audit log.
+- **Status page**: 90 days of daily uptime bars per service (`status_page.days`), and updates you post from the Uptime page:
+  incidents, planned maintenance (with a "Scheduled maintenance" banner while it runs) and notices.
 - `ratio` unit for fractional metrics, displayed as percentages in dashboards, alerts and notifications; thresholds remain in query units.
+- Continuous integration now also runs ruff, CodeQL and dependency review, and Dependabot patch/minor updates merge themselves
+  once checks pass.
+- `/api/public/status` now includes `days`, `uptime_period`, `period_days` and `announcements`.
+
+### Changed
+- Uptime results are summed into daily totals that are kept for 400 days, so the status page can show a long history while
+  raw check results are still pruned after `retention_days`.
 
 ## [0.3.0] - 2026-11-02
 
