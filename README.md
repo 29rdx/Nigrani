@@ -61,6 +61,7 @@ silently stops. Nigrani answers the operational questions directly:
 | **AWS CloudWatch** | Alert rules straight on CloudWatch metrics (RDS, EC2, ELB, SQS, anything), one alert per database or instance, with the metric charted on the incident page. No exporter needed |
 | **Kubernetes** | Nodes, pods and deployments on their own page, and alert rules for crash-looping or failed pods, stuck or restarting pods, unready nodes and deployments missing replicas. Read-only, no agent in the cluster |
 | **GPUs and LLM serving** | Presets for NVIDIA GPUs (dcgm-exporter), vLLM and Triton: utilization, memory, temperature, queue depth, KV cache, time to first token and tokens per second, with alerts for a full GPU, overheating, XID errors, a backed-up request queue and slow first tokens. Auto-discovery switches them on when it sees the metrics |
+| **AI assistants (MCP)** | An MCP server at `/mcp` so Claude Code and other assistants can ask "what is firing?", read an incident, or run a PromQL query. Read-only, with API tokens that never get the admin role |
 | **Argo CD** | The state of your GitOps applications on their own page (health, sync, revision, errors), alert rules for applications that are out of sync, degraded, stuck progressing or failing to sync, and every sync as a deploy marker on the incident page. Read-only, with a token that can only `get` |
 | **Datadog** | Alert rules straight on Datadog metric queries (one alert per host or tag), the metric charted on the incident page, and a page of monitors that are alerting, warning or have no data |
 | **Azure Monitor** | Alert rules straight on Azure Monitor metrics (VMs, PostgreSQL, SQL, App Service...), one alert per resource, with the metric charted on the incident page |
@@ -740,6 +741,37 @@ history is not included.
 
 The API equivalent is `POST /api/backup/import?mode=merge|overwrite&dry_run=true|false` (dry run is the default).
 
+## AI assistants (MCP)
+
+Nigrani can be an [MCP](https://modelcontextprotocol.io) server, so an assistant such as Claude Code can look at your monitoring
+while you work: "is anything firing?", "why did the disk alert fire at 3 am?", "what is the p95 latency of the API now?".
+
+```yaml
+mcp: {enabled: true}             # or NIGRANI_MCP=1; it is on in demo mode
+```
+
+1. As an admin, open **Users → API tokens → New token**, name it, keep the *Viewer* access, and copy the token (it is shown once and
+   only a hash is stored). Tokens never get the admin role, and can expire.
+2. Connect the assistant:
+
+```bash
+claude mcp add --transport http nigrani https://nigrani.example.com/mcp --header "Authorization: Bearer nig_..."
+```
+
+Then ask in plain language. Every tool only reads:
+
+| Tool | What it gives the assistant |
+|---|---|
+| `nigrani_status` | The banner, the key health numbers, containers, uptime checks and the alerts that are firing |
+| `nigrani_incidents` / `nigrani_incident` | Alerts (firing or resolved), and everything around one: the metric, container CPU and memory, restarts, deploys, related alerts, the timeline |
+| `nigrani_query` / `nigrani_query_range` | A PromQL query now, or summarised over the last N minutes (first, min, max, last, the shape) |
+| `nigrani_rules`, `nigrani_containers`, `nigrani_slos`, `nigrani_deploys`, `nigrani_argocd`, `nigrani_servers` | The rules and their thresholds, containers, error budgets, recent deploys and Argo CD syncs, and which servers exist |
+
+The tools call Nigrani's own API with the token you gave, so a token sees exactly what its role allows, and a revoked or expired
+token stops working at once. The same tokens work on the REST API (`Authorization: Bearer nig_...`), for example in a script.
+Alert names, labels and log-derived values come from your systems and reach the assistant as tool results, so treat what it
+reads as untrusted input like any other tool output; nothing it can call changes anything.
+
 ## Users, roles and single sign-on
 
 The account in `auth.username` / `auth.password` is the **configured administrator**: it always works, is always an
@@ -784,6 +816,9 @@ Users page. Only verified e-mail addresses are accepted. Users and the audit log
   (`NIGRANI_ALLOW_NO_AUTH=1` exists for local development only).
 - Login is rate-limited, sessions are signed `HttpOnly` cookies, and state-changing requests need a custom header
   (CSRF protection). Secrets are masked in API responses.
+- API tokens are random, stored only as a hash, shown once, limited to viewer or editor, and revocable; an admin sees who made
+  each one and when it was last used. The MCP endpoint accepts only these tokens (never the browser session) and every tool it offers
+  is read-only.
 - **Serve it over HTTPS** (a reverse proxy such as Caddy/Traefik/nginx, or a VPN) when exposed to the internet.
 - **Keep Prometheus, Loki and the exporters private.** Nigrani is the only thing that needs to be reachable. In
   particular don't publish Prometheus' port to the internet; it has no authentication.

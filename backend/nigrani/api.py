@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
 from . import __version__
-from .auth import COOKIE, Auth, Identity, make_authorizer
+from .auth import COOKIE, Auth, Identity, hash_token, make_authorizer, new_token
 from .oidc import Oidc, OidcError, new_login
 from .sentry import SORTS as SENTRY_SORTS
 from .sentry import Sentry
@@ -91,6 +91,12 @@ class SilenceIn(BaseModel):
     match: str | None = None
     minutes: int = Field(60, ge=1, le=60 * 24 * 30)
     reason: str = ""
+
+
+class TokenIn(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+    role: Literal["viewer", "editor"] = "viewer"       # a token is never an admin: users and backups stay with people
+    days: int | None = Field(None, ge=1, le=3650)       # None = does not expire
 
 
 class AiRuleIn(BaseModel):
@@ -224,6 +230,8 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
             store.prune(cfg.retention_days)
             await asyncio.sleep(86400)
 
+    mcp_holder: dict[str, Any] = {"manager": None}
+
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
         seed()
@@ -231,7 +239,8 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
         for rt in runtimes.values():
             coros += [rt.checks.run(), containers_loop(rt)]
         tasks = [asyncio.create_task(t) for t in coros]
-        yield
+        async with (mcp_holder["manager"].run() if mcp_holder["manager"] else contextlib.nullcontext()):
+            yield
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
@@ -276,6 +285,7 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
         ("PUT", r"^/api/users/\d+$", "user.update"), ("DELETE", r"^/api/users/\d+$", "user.delete"),
         ("DELETE", r"^/api/containers/.+$", "container.forget"),
         ("POST", r"^/api/discovery/[a-z0-9_-]+/enable$", "preset.enable"), ("DELETE", r"^/api/discovery/[a-z0-9_-]+$", "preset.disable"),
+        ("POST", r"^/api/tokens$", "token.create"), ("DELETE", r"^/api/tokens/\d+$", "token.delete"),
         ("POST", r"^/api/incidents/\d+/explain$", "ai.explain"), ("POST", r"^/api/ai/rule$", "ai.rule"),
         ("POST", r"^/api/announcements$", "announcement.create"), ("POST", r"^/api/announcements/\d+/resolve$", "announcement.resolve"),
         ("DELETE", r"^/api/announcements/\d+$", "announcement.delete"),
@@ -1224,6 +1234,66 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
                         "deployments": len(deployments), "deployments_unavailable": sum(d["available"] < d["desired"] for d in deployments)},
         }
 
+    # ---------------- API tokens (admin) ----------------
+    @secured.get("/tokens")
+    async def list_tokens() -> list[dict[str, Any]]:
+        return store.list_api_tokens()
+
+    @secured.post("/tokens")
+    async def create_token(body: TokenIn, request: Request, who: Identity = Depends(authorize)) -> dict[str, Any]:
+        """The token is returned once; only its hash is kept."""
+        token = new_token()
+        now = time.time()
+        tid = store.create_api_token(name=body.name.strip(), token_hash=hash_token(token), prefix=token[:8], role=body.role,
+                                     by=who.username, now=now, expires_at=now + body.days * 86400 if body.days else None)
+        request.state.audit_detail = f"{body.name.strip()} ({body.role})"
+        return {"id": tid, "name": body.name.strip(), "role": body.role, "token": token, "expires_at": now + body.days * 86400 if body.days else None}
+
+    @secured.delete("/tokens/{token_id}")
+    async def delete_token(token_id: int) -> dict[str, bool]:
+        store.delete_api_token(token_id)
+        return {"ok": True}
+
+    # ---------------- ad-hoc queries (read-only; the same reach as previewing a rule) ----------------
+    def _query_client(rt: Runtime, datasource: str) -> Any:
+        client = client_for(datasource, rt.view.id, rt.prom)
+        if client is None:
+            raise HTTPException(400, f"{rt.view.name} has no {datasource} configured")
+        return client
+
+    @secured.get("/query")
+    async def instant_query(expr: str = Query(..., min_length=1, max_length=2000), datasource: str = "prometheus",
+                            rt: Runtime = Depends(srv)) -> dict[str, Any]:
+        client = _query_client(rt, datasource)
+        try:
+            res = await client.instant(expr)
+        except PromError as e:
+            raise _prom_guard(e) from e
+        return {"expr": expr, "count": len(res), "truncated": len(res) > 200,
+                "series": [{"labels": r["labels"], "value": r["value"]} for r in res[:200]]}
+
+    @secured.get("/query_range")
+    async def range_query(expr: str = Query(..., min_length=1, max_length=2000), minutes: int = Query(60, ge=5, le=10080),
+                          datasource: str = "prometheus", rt: Runtime = Depends(srv)) -> dict[str, Any]:
+        """A summary of each series over the last `minutes` (first, min, max, last and about a dozen points), not every sample."""
+        client = _query_client(rt, datasource)
+        end = time.time()
+        window = minutes * 60
+        try:
+            res = await client.range(expr, end - window, end, max(15, window // 120))
+        except PromError as e:
+            raise _prom_guard(e) from e
+        out = []
+        for r in res[:20]:
+            pts = [p for p in r["points"] if p[1] is not None]
+            if not pts:
+                continue
+            vals = [p[1] for p in pts]
+            keep = pts[:: max(1, len(pts) // 12)][:13]
+            out.append({"labels": r["labels"], "first": vals[0], "min": min(vals), "max": max(vals), "last": vals[-1],
+                        "points": [[round(t), v] for t, v in keep]})
+        return {"expr": expr, "minutes": minutes, "count": len(res), "truncated": len(res) > 20, "series": out}
+
     # ---------------- slos ----------------
     @secured.get("/slos")
     async def slos(rt: Runtime = Depends(srv)) -> dict[str, Any]:
@@ -1270,6 +1340,14 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
 
     app.include_router(api)
     app.include_router(secured)
+
+    # ---------------- MCP server for AI assistants (optional, read-only) ----------------
+    if cfg.mcp.enabled:
+        from starlette.routing import Route
+
+        from .mcp_server import build as build_mcp
+        mcp_app, mcp_holder["manager"] = build_mcp(app, auth)
+        app.router.routes.append(Route("/mcp", mcp_app))
 
     # ---------------- static frontend ----------------
     static = Path(os.environ.get("NIGRANI_STATIC_DIR", Path(__file__).resolve().parents[2] / "frontend" / "dist"))

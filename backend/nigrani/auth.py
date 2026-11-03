@@ -25,8 +25,17 @@ if TYPE_CHECKING:
     from .store import Store
 
 COOKIE = "nigrani_session"
+TOKEN_PREFIX = "nig_"
 ROLES = ("viewer", "editor", "admin")
 RANK = {r: i for i, r in enumerate(ROLES)}
+
+
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def new_token() -> str:
+    return TOKEN_PREFIX + secrets.token_urlsafe(32)
 
 
 @dataclass(frozen=True)
@@ -34,7 +43,7 @@ class Identity:
     username: str
     name: str
     role: str
-    provider: str  # config | local | oidc
+    provider: str  # config | local | oidc | token
     user_id: int | None = None
 
     def can(self, role: str) -> bool:
@@ -43,7 +52,7 @@ class Identity:
 
 # What a request needs. Read access is the default for GET; anything that changes state needs at least `editor`,
 # so a new mutating route that is forgotten here fails closed instead of being open to viewers.
-ADMIN_PREFIXES = ("/api/users", "/api/audit", "/api/backup/import")
+ADMIN_PREFIXES = ("/api/users", "/api/audit", "/api/backup/import", "/api/tokens")
 VIEWER_POSTS = {"/api/rules/test", "/api/channels/preview"}  # previews: they only read
 
 
@@ -130,11 +139,30 @@ class Auth:
             return None
         return Identity(user["username"], user["name"], user["role"], provider, user["id"])
 
+    def identity_from_bearer(self, token: str) -> Identity | None:
+        """An API token (`nig_...`, created by an admin), or a signed session value used as a bearer."""
+        if token.startswith(TOKEN_PREFIX):
+            if self.store is None:
+                return None
+            row = self.store.find_api_token(hash_token(token))
+            now = time.time()
+            if not row or (row["expires_at"] and row["expires_at"] < now):
+                return None
+            if not row["last_used"] or now - row["last_used"] > 60:
+                self.store.touch_api_token(row["id"], now)
+            return Identity(f"token:{row['name']}", row["name"], row["role"], "token")
+        data = self.read_blob(token)
+        if not data or "u" not in data:
+            return None
+        return self.identity_for(data["u"], data.get("p", "config"))
+
     def identity_from(self, request: Request) -> Identity | None:
         if not self.enabled:
             return Identity("anonymous", "anonymous", "admin", "config")
         header = request.headers.get("authorization", "")
-        token = header[7:] if header.lower().startswith("bearer ") else request.cookies.get(COOKIE)
+        if header.lower().startswith("bearer "):
+            return self.identity_from_bearer(header[7:].strip())
+        token = request.cookies.get(COOKIE)
         data = self.read_blob(token)
         if not data or "u" not in data:
             return None

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api, useApi } from '../api';
+import ApiTokens from '../components/ApiTokens';
 import { Badge, Card, ErrorNote, Modal, Toggle } from '../components/ui';
 import { useApp } from '../ctx';
 import { fmtAgo } from '../format';
@@ -84,6 +85,7 @@ export default function Users() {
           })}</tbody>
         </table></div>
       </Card>
+      <ApiTokens />
       {edit && <UserModal user={edit.id ? edit : null} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); reload(); }} />}
     </div>
   );

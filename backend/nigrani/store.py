@@ -59,6 +59,11 @@ CREATE TABLE IF NOT EXISTS audit (
 );
 CREATE INDEX IF NOT EXISTS ix_audit_ts ON audit(ts);
 CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, prefix TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'viewer', created_by TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL,
+  last_used REAL, expires_at REAL
+);
 CREATE TABLE IF NOT EXISTS check_daily (
   check_id TEXT NOT NULL, day TEXT NOT NULL, up INTEGER NOT NULL DEFAULT 0, total INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (check_id, day)
@@ -395,6 +400,26 @@ class Store:
         rows = self._q("SELECT day, up, total FROM check_daily WHERE check_id=? AND day >= date(?, 'unixepoch') ORDER BY day",
                        (check_id, since))
         return [dict(r) for r in rows]
+
+    # ---- API tokens (only a hash is stored; the token itself is shown once) ----
+    def create_api_token(self, *, name: str, token_hash: str, prefix: str, role: str, by: str, now: float,
+                         expires_at: float | None) -> int:
+        return self._x("INSERT INTO api_tokens(name,token_hash,prefix,role,created_by,created_at,expires_at) VALUES(?,?,?,?,?,?,?)",
+                       (name, token_hash, prefix, role, by, now, expires_at))
+
+    def find_api_token(self, token_hash: str) -> dict[str, Any] | None:
+        rows = self._q("SELECT * FROM api_tokens WHERE token_hash=?", (token_hash,))
+        return dict(rows[0]) if rows else None
+
+    def touch_api_token(self, token_id: int, now: float) -> None:
+        self._x("UPDATE api_tokens SET last_used=? WHERE id=?", (now, token_id))
+
+    def list_api_tokens(self) -> list[dict[str, Any]]:
+        return [{k: v for k, v in dict(r).items() if k != "token_hash"}
+                for r in self._q("SELECT * FROM api_tokens ORDER BY created_at DESC")]
+
+    def delete_api_token(self, token_id: int) -> None:
+        self._x("DELETE FROM api_tokens WHERE id=?", (token_id,))
 
     # ---- status page announcements ----
     def add_announcement(self, *, kind: str, title: str, body: str, starts_at: float, ends_at: float | None,

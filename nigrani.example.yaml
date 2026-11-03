@@ -177,6 +177,9 @@ status_page:
 #     errors: sum(rate(django_http_responses_total_by_status_total{status=~"5.."}[{{window}}]))
 #   - {id: website-uptime, name: Website uptime, target: 99.5, check: web}   # an uptime check as the SLI
 
+# Let AI assistants (Claude Code...) read from Nigrani over MCP at /mcp. Read-only; needs an API token (Users > API tokens).
+# mcp: {enabled: true}
+
 # ---- Customising ------------------------------------------------------------------------------------------
 
 # Replace or add alert rules. A rule with the same id as a preset rule replaces it.

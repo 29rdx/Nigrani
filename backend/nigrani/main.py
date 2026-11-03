@@ -19,6 +19,8 @@ def apply_env_overrides(cfg: Config) -> Config:
         cfg.datasources.prometheus = env["NIGRANI_PROMETHEUS_URL"]
     if env.get("NIGRANI_LOKI_URL"):
         cfg.datasources.loki = env["NIGRANI_LOKI_URL"]
+    if env.get("NIGRANI_MCP", "").lower() in ("1", "true", "yes"):
+        cfg.mcp.enabled = True
     if env.get("NIGRANI_DATA_DIR"):
         cfg.data_dir = env["NIGRANI_DATA_DIR"]
     return cfg

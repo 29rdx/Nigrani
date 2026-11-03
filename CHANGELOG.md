@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **MCP server** (`mcp: {enabled: true}` / `NIGRANI_MCP=1`, on in demo mode): Nigrani serves read-only tools at `/mcp` (status, incidents, one incident in
+  detail, PromQL queries, rules, containers, SLOs, deploys, Argo CD) so Claude Code and other MCP clients can investigate alerts. The tools use the
+  caller's token against Nigrani's own API.
+- **API tokens** (Users page, admin): long-lived bearer tokens (`nig_...`, viewer or editor, optional expiry, stored hashed, shown once) for scripts
+  and assistants, plus read-only `GET /api/query` and `/api/query_range`.
 - **GPU and LLM serving presets**: `gpu` (NVIDIA dcgm-exporter), `vllm` and `triton`, each with a page, tiles and alert rules
   (GPU memory, temperature and XID errors; request queue, KV cache and time to first token; failure rate and queue time). They describe
   themselves for auto-discovery. `gpu-idle` is off by default.

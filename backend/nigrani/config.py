@@ -279,6 +279,11 @@ class SloCfg(_M):
         return self
 
 
+class McpCfg(_M):
+    """Serve Nigrani to AI assistants over MCP at /mcp (read-only tools; needs an API token unless authentication is off)."""
+    enabled: bool = False
+
+
 class ArgoCDCfg(_M):
     """Argo CD applications through its REST API (read-only). Create the token with `argocd account generate-token` for an
     account (or project role) that may `get` applications."""
@@ -523,6 +528,7 @@ class Config(_M):
     status_page: StatusPageCfg = StatusPageCfg()
     ai: AiCfg = AiCfg()
     slos: list[SloCfg] = Field(default_factory=list)
+    mcp: McpCfg = McpCfg()
     demo: bool = False  # sample data and a read-only UI, for trying Nigrani without Prometheus (NIGRANI_DEMO=1)
     disable: dict[str, list[str]] = Field(default_factory=dict)  # {tiles|pages|rules: [ids]}
     data_dir: str = "/data"
@@ -656,6 +662,7 @@ def demo_defaults() -> dict[str, Any]:
             {"id": "database", "name": "Database", "type": "tcp", "target": f"127.0.0.1:{port}", "interval": 30},
         ],
         "status_page": {"enabled": True, "title": "Acme status"},
+        "mcp": {"enabled": True},
         "demo": True,
     }
 
