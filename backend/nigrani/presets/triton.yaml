@@ -1,0 +1,53 @@
+# Needs: NVIDIA Triton Inference Server's metrics endpoint (port 8002) scraped by Prometheus. Names are from Triton's metrics docs.
+title: NVIDIA Triton
+about: Requests, failures, queue time and GPU use per model, with alerts for failing requests and a slow queue.
+detect: [nv_inference_request_success]
+tiles:
+  - id: triton-failures
+    title: Triton failed requests
+    unit: ratio
+    query: sum(rate(nv_inference_request_failure[5m])) / (sum(rate(nv_inference_request_success[5m])) + sum(rate(nv_inference_request_failure[5m])))
+    warn: 0.01
+    crit: 0.05
+pages:
+  - id: triton
+    title: Triton
+    icon: activity
+    requires: nv_inference_request_success
+    hint: Triton serves Prometheus metrics on port 8002; add a scrape job for it.
+    panels:
+      - title: Requests per second
+        unit: rps
+        queries:
+          - expr: sum by (model) (rate(nv_inference_request_success[5m]))
+            legend: "{model} ok"
+          - expr: sum by (model) (rate(nv_inference_request_failure[5m]))
+            legend: "{model} failed"
+      - title: Queue time per request
+        unit: ms
+        expr: sum by (model) (rate(nv_inference_queue_duration_us[5m])) / sum by (model) (rate(nv_inference_request_success[5m])) / 1000
+        legend: "{model}"
+      - title: Requests waiting for a backend
+        expr: sum by (model) (nv_inference_pending_request_count)
+        legend: "{model}"
+      - title: GPU utilization
+        unit: ratio
+        expr: nv_gpu_utilization
+        legend: "GPU {gpu_uuid}"
+rules:
+  - id: triton-failures
+    name: Triton requests failing
+    expr: sum by (model) (rate(nv_inference_request_failure[5m])) / (sum by (model) (rate(nv_inference_request_success[5m])) + sum by (model) (rate(nv_inference_request_failure[5m])))
+    unit: ratio
+    warn: 0.01
+    crit: 0.05
+    for_seconds: 300
+    summary: A share of the requests to this model are failing.
+  - id: triton-queue-slow
+    name: Triton queue time high
+    expr: sum by (model) (rate(nv_inference_queue_duration_us[5m])) / sum by (model) (rate(nv_inference_request_success[5m])) / 1000
+    unit: ms
+    warn: 100
+    crit: 500
+    for_seconds: 300
+    summary: Requests spend this long waiting in the queue before they run. The model needs more instances or a larger batch.

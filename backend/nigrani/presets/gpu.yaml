@@ -1,0 +1,74 @@
+# Needs: NVIDIA dcgm-exporter (https://github.com/NVIDIA/dcgm-exporter) scraped by Prometheus. Metric names are the ones in its default-counters.csv.
+title: NVIDIA GPUs
+about: Utilization, memory, temperature and power per GPU, with alerts for a full GPU memory, overheating and XID errors.
+detect: [DCGM_FI_DEV_GPU_UTIL]
+tiles:
+  - id: gpu-util
+    title: GPU utilization
+    unit: percent
+    query: max(DCGM_FI_DEV_GPU_UTIL)
+    description: The busiest GPU.
+  - id: gpu-memory
+    title: GPU memory
+    unit: ratio
+    query: max(DCGM_FI_DEV_FB_USED / (DCGM_FI_DEV_FB_USED + DCGM_FI_DEV_FB_FREE))
+    warn: 0.92
+    crit: 0.98
+    description: The fullest GPU.
+  - id: gpu-temp
+    title: GPU temperature (°C)
+    query: max(DCGM_FI_DEV_GPU_TEMP)
+    warn: 83
+    crit: 90
+pages:
+  - id: gpus
+    title: GPUs
+    icon: chart
+    requires: DCGM_FI_DEV_GPU_UTIL
+    hint: Run NVIDIA's dcgm-exporter next to your GPUs (the GPU Operator installs it on Kubernetes) and add a Prometheus scrape job for it.
+    panels:
+      - title: Utilization
+        unit: percent
+        expr: DCGM_FI_DEV_GPU_UTIL
+        legend: "{Hostname} GPU {gpu}"
+      - title: Memory used
+        unit: ratio
+        expr: DCGM_FI_DEV_FB_USED / (DCGM_FI_DEV_FB_USED + DCGM_FI_DEV_FB_FREE)
+        legend: "{Hostname} GPU {gpu}"
+      - title: Temperature (°C)
+        expr: DCGM_FI_DEV_GPU_TEMP
+        legend: "{Hostname} GPU {gpu}"
+      - title: Power draw (W)
+        expr: DCGM_FI_DEV_POWER_USAGE
+        legend: "{Hostname} GPU {gpu}"
+rules:
+  - id: gpu-memory-full
+    name: GPU memory almost full
+    expr: label_join(DCGM_FI_DEV_FB_USED / (DCGM_FI_DEV_FB_USED + DCGM_FI_DEV_FB_FREE), "name", " GPU ", "Hostname", "gpu")
+    unit: ratio
+    warn: 0.92
+    crit: 0.98
+    for_seconds: 300
+    summary: A GPU's memory is nearly full. Jobs will start failing with out-of-memory errors.
+  - id: gpu-hot
+    name: GPU running hot
+    expr: label_join(DCGM_FI_DEV_GPU_TEMP, "name", " GPU ", "Hostname", "gpu")
+    warn: 83
+    crit: 90
+    for_seconds: 300
+    summary: A GPU is above 83 °C. Check cooling; the card will throttle its clocks and slow your jobs down.
+  - id: gpu-xid-error
+    name: GPU reported an XID error
+    expr: label_join(DCGM_FI_DEV_XID_ERRORS, "name", " GPU ", "Hostname", "gpu")
+    crit: 0
+    for_seconds: 0
+    summary: The driver logged an XID error on this GPU (the value is the XID code). Look the code up in NVIDIA's XID catalog; many mean a failing GPU or a crashed workload.
+  - id: gpu-idle
+    name: GPU sitting idle
+    expr: label_join(avg_over_time(DCGM_FI_DEV_GPU_UTIL[1h]), "name", " GPU ", "Hostname", "gpu")
+    unit: percent
+    direction: below
+    warn: 5
+    for_seconds: 3600
+    enabled: false
+    summary: "A GPU has been almost unused for an hour. This rule is off by default; turn it on to catch expensive GPUs that nobody is using."

@@ -60,6 +60,7 @@ silently stops. Nigrani answers the operational questions directly:
 | **Sentry** | Unresolved, new and fatal issues on their own page, alert rules over Sentry searches, and the matching issues on an incident's page |
 | **AWS CloudWatch** | Alert rules straight on CloudWatch metrics (RDS, EC2, ELB, SQS, anything), one alert per database or instance, with the metric charted on the incident page. No exporter needed |
 | **Kubernetes** | Nodes, pods and deployments on their own page, and alert rules for crash-looping or failed pods, stuck or restarting pods, unready nodes and deployments missing replicas. Read-only, no agent in the cluster |
+| **GPUs and LLM serving** | Presets for NVIDIA GPUs (dcgm-exporter), vLLM and Triton: utilization, memory, temperature, queue depth, KV cache, time to first token and tokens per second, with alerts for a full GPU, overheating, XID errors, a backed-up request queue and slow first tokens. Auto-discovery switches them on when it sees the metrics |
 | **Argo CD** | The state of your GitOps applications on their own page (health, sync, revision, errors), alert rules for applications that are out of sync, degraded, stuck progressing or failing to sync, and every sync as a deploy marker on the incident page. Read-only, with a token that can only `get` |
 | **Datadog** | Alert rules straight on Datadog metric queries (one alert per host or tag), the metric charted on the incident page, and a page of monitors that are alerting, warning or have no data |
 | **Azure Monitor** | Alert rules straight on Azure Monitor metrics (VMs, PostgreSQL, SQL, App Service...), one alert per resource, with the metric charted on the incident page |
@@ -218,12 +219,17 @@ Nigrani only reads from Prometheus/Loki. Which pages light up depends on which e
 | `rds` | [yet-another-cloudwatch-exporter](https://github.com/prometheus-community/yet-another-cloudwatch-exporter) | AWS RDS page, CPU/storage alerts |
 | `mqtt` | a Mosquitto exporter | MQTT page |
 | `celery` | [celery-exporter](https://github.com/danihodovic/celery-exporter) | Celery page, queue/worker alerts |
+| `gpu` | NVIDIA [dcgm-exporter](https://github.com/NVIDIA/dcgm-exporter) | GPUs page, memory, temperature and XID-error alerts |
+| `vllm` | a [vLLM](https://github.com/vllm-project/vllm) server (its `/metrics`) | LLM serving page, queue, KV cache and time-to-first-token alerts |
+| `triton` | [NVIDIA Triton](https://github.com/triton-inference-server/server) (metrics on port 8002) | Triton page, failure-rate and queue-time alerts |
 | `logs` | Loki (`datasources.loki`) | A log-based alert: error spike per container |
 
 A page whose metrics are missing shows which exporter to add, instead of empty charts.
 
 The `django`, `redis`, `postgres`, `mqtt` and `celery` presets are checked against the real exporters in
-[dev/lab](dev/lab) (versions listed there); `core` is checked against node-exporter + cAdvisor.
+[dev/lab](dev/lab) (versions listed there); `core` is checked against node-exporter + cAdvisor. The `gpu`, `vllm` and
+`triton` presets use the metric names from the projects' own documentation and were run against a stand-in that serves
+those names to a real Prometheus; they have not been run on GPU hardware.
 Logs need Loki with a container-name label (see [deploy/promtail.yml](deploy/promtail.yml)).
 
 > **Docker 29+ and cAdvisor:** cAdvisor older than v0.53 can't talk to the Docker 29 API, so container names are
@@ -440,6 +446,23 @@ presets: [core, kubernetes]
   adds a rule for each. If the API is unreachable or refuses the token the rule shows why and nothing is raised or
   resolved because of it.
 - With `servers:` each server can point at its own cluster.
+
+## GPUs and LLM serving
+
+![The GPUs page](docs/screenshots/gpus.png)
+
+Three presets for machine-learning infrastructure. They need nothing but the exporter being scraped: with
+[auto-discovery](#auto-discovery) Nigrani suggests each one as soon as its metrics show up in Prometheus (or add them to `presets:`).
+
+| Preset | Page | Alert rules |
+|---|---|---|
+| `gpu` ([dcgm-exporter](https://github.com/NVIDIA/dcgm-exporter)) | GPUs: utilization, memory, temperature and power per GPU | memory almost full (92% / 98%), running hot (83 / 90 °C), an XID error on a GPU (critical); *GPU sitting idle* for an hour exists but is **off by default** |
+| `vllm` | LLM serving: requests running and waiting, KV cache used, time to first token, end-to-end latency, tokens per second | request queue backing up (10 / 50 waiting), KV cache almost full (90% / 97%), slow time to first token (p95 over 2 s / 5 s) |
+| `triton` | Triton: requests and failures per second, queue time, pending requests, GPU utilization | requests failing (1% / 5%), queue time high (100 ms / 500 ms) |
+
+![LLM serving page](docs/screenshots/llm-serving.png)
+
+Alerts are per GPU (`gpu-node-1 GPU 0`) or per model, so you see which one. The screenshots show sample data.
 
 ## Argo CD
 

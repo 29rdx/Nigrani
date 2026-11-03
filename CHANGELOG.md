@@ -5,6 +5,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **GPU and LLM serving presets**: `gpu` (NVIDIA dcgm-exporter), `vllm` and `triton`, each with a page, tiles and alert rules
+  (GPU memory, temperature and XID errors; request queue, KV cache and time to first token; failure rate and queue time). They describe
+  themselves for auto-discovery. `gpu-idle` is off by default.
+
 ## [0.5.0] - 2026-11-03
 
 ### Added

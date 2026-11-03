@@ -33,6 +33,9 @@ datasources:
 #   rds       yet-another-cloudwatch-exporter (AWS/RDS)
 #   mqtt      a Mosquitto exporter
 #   celery    celery-exporter            workers, queue length, failures
+#   gpu       NVIDIA dcgm-exporter       GPUs page, memory / temperature / XID alerts
+#   vllm      a vLLM server              LLM serving page, queue / KV cache / time-to-first-token alerts
+#   triton    NVIDIA Triton              Triton page, failure-rate and queue-time alerts
 #   logs      Loki (datasources.loki)    error-spike alert per container (LogQL rule)
 #   sentry    Sentry (sentry:)           new-issue and fatal-issue alerts
 #   azure     Azure Monitor (azure:)        VM, PostgreSQL, SQL and App Service plan rules

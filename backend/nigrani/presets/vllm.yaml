@@ -1,0 +1,83 @@
+# Needs: a vLLM OpenAI-compatible server (its /metrics endpoint, `vllm:` metrics) scraped by Prometheus.
+# Metric names follow vLLM's v1 metrics (docs: Production Metrics).
+title: vLLM inference server
+about: Requests running and queued, KV cache use, time to first token and latency, tokens per second, with alerts for a backed-up queue, a full KV cache and slow first tokens.
+detect: ["vllm:num_requests_running"]
+tiles:
+  - id: vllm-queue
+    title: LLM requests waiting
+    query: sum(vllm:num_requests_waiting)
+    warn: 10
+    crit: 50
+  - id: vllm-ttft
+    title: LLM time to first token (p95)
+    unit: seconds
+    query: histogram_quantile(0.95, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket[5m])))
+    warn: 2
+    crit: 5
+pages:
+  - id: vllm
+    title: LLM serving
+    icon: activity
+    requires: "vllm:num_requests_running"
+    hint: Start vLLM with its OpenAI-compatible server and add a Prometheus scrape job for its /metrics endpoint.
+    panels:
+      - title: Requests running and waiting
+        queries:
+          - expr: sum(vllm:num_requests_running)
+            legend: running
+          - expr: sum(vllm:num_requests_waiting)
+            legend: waiting
+      - title: KV cache used
+        unit: ratio
+        expr: max by (model_name) (vllm:kv_cache_usage_perc)
+        legend: "{model_name}"
+      - title: Time to first token
+        unit: seconds
+        queries:
+          - expr: histogram_quantile(0.50, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket[5m])))
+            legend: p50
+          - expr: histogram_quantile(0.95, sum by (le) (rate(vllm:time_to_first_token_seconds_bucket[5m])))
+            legend: p95
+      - title: End-to-end request latency
+        unit: seconds
+        queries:
+          - expr: histogram_quantile(0.50, sum by (le) (rate(vllm:e2e_request_latency_seconds_bucket[5m])))
+            legend: p50
+          - expr: histogram_quantile(0.95, sum by (le) (rate(vllm:e2e_request_latency_seconds_bucket[5m])))
+            legend: p95
+      - title: Tokens per second
+        kind: area
+        queries:
+          - expr: sum(rate(vllm:prompt_tokens_total[5m]))
+            legend: prompt
+          - expr: sum(rate(vllm:generation_tokens_total[5m]))
+            legend: generated
+      - title: Requests finished per second
+        unit: rps
+        expr: sum by (finished_reason) (rate(vllm:request_success_total[5m]))
+        legend: "{finished_reason}"
+rules:
+  - id: vllm-queue-backlog
+    name: LLM request queue backing up
+    expr: sum by (model_name) (vllm:num_requests_waiting)
+    warn: 10
+    crit: 50
+    for_seconds: 300
+    summary: "Requests are waiting for a free slot. The server is overloaded: add capacity or limit traffic."
+  - id: vllm-kv-cache-full
+    name: LLM KV cache almost full
+    expr: max by (model_name) (vllm:kv_cache_usage_perc)
+    unit: ratio
+    warn: 0.9
+    crit: 0.97
+    for_seconds: 300
+    summary: The KV cache is nearly full, so requests get preempted and latency climbs. Lower the concurrency or give the model more GPU memory.
+  - id: vllm-slow-first-token
+    name: LLM slow time to first token
+    expr: histogram_quantile(0.95, sum by (le, model_name) (rate(vllm:time_to_first_token_seconds_bucket[5m])))
+    unit: seconds
+    warn: 2
+    crit: 5
+    for_seconds: 300
+    summary: Users wait this long for the first word of an answer (p95).
