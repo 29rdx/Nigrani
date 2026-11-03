@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-03
+
 ### Added
 - **MCP server** (`mcp: {enabled: true}` / `NIGRANI_MCP=1`, on in demo mode): Nigrani serves read-only tools at `/mcp` (status, incidents, one incident in
   detail, PromQL queries, rules, containers, SLOs, deploys, Argo CD) so Claude Code and other MCP clients can investigate alerts. The tools use the
