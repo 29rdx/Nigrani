@@ -25,20 +25,17 @@ metadata:
   namespace: monitoring
 data:
   nigrani.yaml: |
-    # Nigrani in-cluster configuration
-    title: Nigrani Cluster Monitor
-    
-    # Prometheus data source (adjust cluster DNS name if Prometheus runs in another namespace)
-    prometheus:
-      url: http://prometheus-server.monitoring.svc.cluster.local:9090
-    
-    # In-cluster Kubernetes discovery:
-    # url is left empty so Nigrani automatically discovers and uses the pod's service account and CA
+    # Nigrani in-cluster configuration matching nigrani.example.yaml schema
+    app:
+      name: Nigrani Cluster Monitor
+
+    datasources:
+      prometheus: "http://prometheus-server.monitoring.svc.cluster.local:9090"
+
+    # In-cluster Kubernetes discovery: url stays empty so the pod's service account and CA are used
     kubernetes:
-      url: ""
-      namespaces: [] # empty means all namespaces
-    
-    # Standard alert presets
+      namespaces: []
+
     presets: [core, kubernetes]
 ---
 apiVersion: v1
