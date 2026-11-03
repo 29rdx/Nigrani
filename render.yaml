@@ -1,0 +1,15 @@
+# One-click live demo on Render's free tier: the public image running in demo mode (sample data, read-only, no login).
+# https://render.com/deploy?repo=https://github.com/nikhilrai-tech/Nigrani
+services:
+  - type: web
+    name: nigrani-demo
+    runtime: image
+    image:
+      url: ghcr.io/nikhilrai-tech/nigrani:latest
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: NIGRANI_DEMO
+        value: "1"
+      - key: PORT                # the port the image listens on
+        value: "8080"

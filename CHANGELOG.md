@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-03
+
 ### Added
 - **Demo mode** (`NIGRANI_DEMO=1`): sample data in place of Prometheus, a few finished incidents and 90 days of uptime history,
   and a bad spell every 90 minutes so alerts fire and resolve for real. No login; the UI is read-only, so it can be hosted

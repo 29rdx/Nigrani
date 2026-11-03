@@ -542,6 +542,13 @@ created, changed or sent, so it is safe to host publicly as a live demo.
 
 Settings in a config file you mount (`NIGRANI_CONFIG`) still apply on top, for example `app.name` or `status_page`.
 
+**Host your own live demo** on Render's free tier (it pulls the public image, nothing to build):
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/nikhilrai-tech/Nigrani)
+
+The button reads [render.yaml](render.yaml). Free services sleep after 15 minutes without visitors and wake in under a minute
+on the next request.
+
 ## Backup and restore
 
 The **Backup** page (or `GET /api/backup`) exports everything you configured in the UI (alert rules, notification
