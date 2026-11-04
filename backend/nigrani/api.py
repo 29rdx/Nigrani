@@ -26,6 +26,7 @@ from .argocd import ArgoCD, sync_failing
 from .azure import Azure
 from .cloudwatch import CloudWatch
 from .datadog import Datadog
+from .newrelic import NewRelic
 from .kubernetes import Kubernetes
 from .passwords import hash_password, password_problem
 from .ai import Ai, AiError
@@ -129,6 +130,7 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
                loki: "dict[str, Prom] | None" = None, sentry: "dict[str, Any] | None" = None,
                cloudwatch: "dict[str, Any] | None" = None, kubernetes: "dict[str, Any] | None" = None,
                datadog: "dict[str, Any] | None" = None, azure: "dict[str, Any] | None" = None, argocd: "dict[str, Any] | None" = None,
+               newrelic: "dict[str, Any] | None" = None,
                ai: "Ai | None" = None) -> FastAPI:
     allow_no_auth = os.environ.get("NIGRANI_ALLOW_NO_AUTH") == "1"
     if not cfg.auth.password and not allow_no_auth and not cfg.demo:
@@ -165,13 +167,14 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
     dogs = datadog if datadog is not None else {v.id: Datadog(v.datadog, v.datasources.timeout) for v in views if v.datadog.enabled}
     azures = azure if azure is not None else {v.id: Azure(v.azure, v.datasources.timeout) for v in views if v.azure.enabled}
     argos = argocd if argocd is not None else {v.id: ArgoCD(v.argocd, v.datasources.timeout) for v in views if v.argocd.enabled}
-    engine = Engine(store, proms, notifier, cfg, lokis=lokis, sentries=sentries, clouds=clouds, kubes=kubes, dogs=dogs, azures=azures, argos=argos)
+    newrelics = newrelic if newrelic is not None else {v.id: NewRelic(v.newrelic, v.datasources.timeout) for v in views if v.newrelic.enabled}
+    engine = Engine(store, proms, notifier, cfg, lokis=lokis, sentries=sentries, clouds=clouds, kubes=kubes, dogs=dogs, azures=azures, argos=argos, newrelics=newrelics)
 
     def datasources_available() -> set[str]:
-        return {"prometheus"} | ({"loki"} if lokis else set()) | ({"sentry"} if sentries else set()) | ({"cloudwatch"} if clouds else set()) | ({"kubernetes"} if kubes else set()) | ({"datadog"} if dogs else set()) | ({"azure"} if azures else set()) | ({"argocd"} if argos else set())
+        return {"prometheus"} | ({"loki"} if lokis else set()) | ({"sentry"} if sentries else set()) | ({"cloudwatch"} if clouds else set()) | ({"kubernetes"} if kubes else set()) | ({"datadog"} if dogs else set()) | ({"azure"} if azures else set()) | ({"argocd"} if argos else set()) | ({"newrelic"} if newrelics else set())
 
     def client_for(datasource: str, server_id: str, prom: Any) -> Any:
-        return {"loki": lokis, "sentry": sentries, "cloudwatch": clouds, "kubernetes": kubes, "datadog": dogs, "azure": azures, "argocd": argos}.get(datasource, {server_id: prom}).get(server_id)
+        return {"loki": lokis, "sentry": sentries, "cloudwatch": clouds, "kubernetes": kubes, "datadog": dogs, "azure": azures, "argocd": argos, "newrelic": newrelics}.get(datasource, {server_id: prom}).get(server_id)
     runtimes: dict[str, Runtime] = {
         v.id: Runtime(v, proms[v.id], CheckRunner(cfg, store, engine, v), GithubDeploys(v.github))
         for v in views if v.id in proms
@@ -244,7 +247,7 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        for p in [*proms.values(), *lokis.values(), *sentries.values(), *clouds.values(), *kubes.values(), *dogs.values(), *azures.values(), *argos.values()]:
+        for p in [*proms.values(), *lokis.values(), *sentries.values(), *clouds.values(), *kubes.values(), *dogs.values(), *azures.values(), *argos.values(), *newrelics.values()]:
             await p.close()
 
     app = FastAPI(title="Nigrani", version=__version__, lifespan=lifespan, docs_url=None, redoc_url=None)
@@ -348,8 +351,8 @@ def create_app(cfg: Config, prom: "Prom | dict[str, Prom] | None" = None,
             "default_server": default_id, "ai": ai_client is not None, "demo": cfg.demo,
             "servers": [{"id": rt.view.id, "name": rt.view.name, "environment": rt.view.environment,
                          "logs": bool(rt.view.datasources.loki), "deploys": rt.github.enabled or rt.view.id in argos, "argocd": rt.view.id in argos, "slo": any(is_applicable(x, rt.view.id) for x in cfg.slos),
-                         "grafana": bool(rt.view.grafana.url), "sentry": rt.view.id in sentries, "kubernetes": rt.view.id in kubes, "datadog": rt.view.id in dogs,
-                         "datasources": ["prometheus"] + (["loki"] if rt.view.id in lokis else []) + (["sentry"] if rt.view.id in sentries else []) + (["cloudwatch"] if rt.view.id in clouds else []) + (["kubernetes"] if rt.view.id in kubes else []) + (["datadog"] if rt.view.id in dogs else []) + (["azure"] if rt.view.id in azures else []) + (["argocd"] if rt.view.id in argos else []),
+                         "grafana": bool(rt.view.grafana.url), "sentry": rt.view.id in sentries, "kubernetes": rt.view.id in kubes, "datadog": rt.view.id in dogs, "newrelic": rt.view.id in newrelics,
+                         "datasources": ["prometheus"] + (["loki"] if rt.view.id in lokis else []) + (["sentry"] if rt.view.id in sentries else []) + (["cloudwatch"] if rt.view.id in clouds else []) + (["kubernetes"] if rt.view.id in kubes else []) + (["datadog"] if rt.view.id in dogs else []) + (["azure"] if rt.view.id in azures else []) + (["argocd"] if rt.view.id in argos else []) + (["newrelic"] if rt.view.id in newrelics else []),
                          "checks": bool(rt.view.checks)} for rt in runtimes.values()],
             "features": {"logs": any(rt.view.datasources.loki for rt in runtimes.values()),
                          "deploys": any(rt.github.enabled or rt.view.id in argos for rt in runtimes.values()),
