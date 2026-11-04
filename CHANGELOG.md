@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-04
+
 - Pages now use the full width on wide screens (the content area was capped at 1500px and left a gap on the right); it is centred up to 2000px.
 
 ### Changed
