@@ -2,10 +2,11 @@ import { useApi } from '../api';
 import Announcements from '../components/Announcements';
 import { Badge, Card, Empty, ErrorNote } from '../components/ui';
 import { fmtAgo } from '../format';
+import { PageSkeleton } from '../components/Skeleton';
 
 export default function Uptime() {
   const { data, error } = useApi('/checks', { interval: 15000 });
-  if (!data) return error ? <ErrorNote>{error}</ErrorNote> : <div className="muted">Loading…</div>;
+  if (!data) return error ? <ErrorNote>{error}</ErrorNote> : <PageSkeleton />;
   if (data.length === 0) return <div className="stack"><Card><Empty title="No uptime checks">Add checks in nigrani.yaml, e.g. <span className="mono">{'{ id: api, name: API, type: http, target: https://api.example.com/health }'}</span>. HTTP, TCP and SSL-expiry checks are supported.</Empty></Card><Announcements /></div>;
   return (
     <div className="stack">

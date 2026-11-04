@@ -5,6 +5,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- **A production-grade UI.** A command palette (`Ctrl/Cmd K` or `/`: pages, alerts, rules, containers, actions), keyboard shortcuts (`g` then `o a c h u i d s`, `?`
+  for help), an account menu, toasts that confirm every action and report failures instead of failing silently, an error boundary so one broken page
+  does not blank the app, a "can't reach Nigrani" banner, skeleton loading instead of "Loading…", and Inter bundled with the app (works offline).
+- Faster: page code is split and fetched ahead of time (the first script went from 101 kB to 58 kB gzipped), and the page no longer jumps while it loads
+  (layout shift 0.16 to 0). Accessibility fixes found by Lighthouse (contrast, heading order, table headers, landmarks, focus trapping and restoring in dialogs):
+  100 on every page. A new logo, favicon, web app manifest and meta tags; the login page is redesigned.
+
+### Fixed
+- Demo mode showed every container metric as the same few bytes/seconds (the demo answered all container queries with the age query).
+
 ## [0.6.0] - 2026-11-03
 
 ### Added

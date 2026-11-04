@@ -1,6 +1,7 @@
 import { useApi } from '../api';
 import { Badge, Card, Empty, ErrorNote, Icon } from '../components/ui';
 import { fmtAgo } from '../format';
+import { SkeletonRows } from '../components/Skeleton';
 
 const KIND = { Alert: 'crit', 'No Data': 'warn', Warn: 'warn' };
 
@@ -40,7 +41,7 @@ export default function Datadog() {
                 </tr>
               ))}</tbody>
             </table></div>
-          ) : <div className="empty muted">Loading…</div>}
+          ) : <SkeletonRows />}
       </Card>
     </div>
   );

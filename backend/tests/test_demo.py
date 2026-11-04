@@ -137,3 +137,20 @@ def test_demo_does_not_start_with_a_failed_check(tmp_path):
             time.sleep(0.1)
         assert latest()["ok"] == 1
     s.close()
+
+
+def test_container_numbers_are_realistic_not_all_the_freshness_age():
+    """Every cAdvisor query embeds container_last_seen in its freshness filter; the demo once answered all of them with the age."""
+    from nigrani.config import ContainersCfg
+    from nigrani.containers import _fresh
+    prom = DemoProm()
+    sel = 'name!=""'
+    fresh = _fresh(sel, ContainersCfg().stale_seconds)
+    mem = run(prom.instant(f"max by (name) (container_memory_working_set_bytes{{{sel}}} and on (id) {fresh})"))
+    cpu = run(prom.instant(f"sum by (name) (rate(container_cpu_usage_seconds_total{{{sel}}}[2m]) and on (id) {fresh}) * 100"))
+    up = run(prom.instant(f"min by (name) ((time() - container_start_time_seconds{{{sel}}}) and on (id) {fresh})"))
+    age = run(prom.instant(f'min by (name) (time() - container_last_seen{{{sel}}})'))
+    assert all(r["value"] > 10_000_000 for r in mem)                  # hundreds of MB, not 4 bytes
+    assert all(0.1 < r["value"] < 200 for r in cpu)
+    assert all(r["value"] > 3600 for r in up)                        # up for hours or days
+    assert all(r["value"] < 10 for r in age)                         # the age query is the one that is a few seconds

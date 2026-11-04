@@ -9,7 +9,7 @@ function Plan({ plan }) {
   return (
     <div className="stack">
       <table className="t">
-        <thead><tr><th /><th>New</th><th>Overwritten</th><th>Skipped</th></tr></thead>
+        <thead><tr><th><span className="sr">Kind</span></th><th>New</th><th>Overwritten</th><th>Skipped</th></tr></thead>
         <tbody>
           {KINDS.map(([k, label]) => {
             const s = plan.summary[k] || { create: 0, update: 0, skip: 0 };

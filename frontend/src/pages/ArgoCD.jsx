@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useApi } from '../api';
 import { Badge, Card, Empty, ErrorNote, Icon } from '../components/ui';
 import { fmtAgo } from '../format';
+import { SkeletonRows } from '../components/Skeleton';
 
 const HEALTH = { Healthy: 'ok', Progressing: 'info', Suspended: '', Degraded: 'crit', Missing: 'crit', Unknown: 'warn' };
 const SYNC = { Synced: 'ok', OutOfSync: 'warn', Unknown: 'warn' };
@@ -71,7 +72,7 @@ export default function ArgoCD() {
                 </tr>
               ))}</tbody>
             </table></div>
-          ) : <div className="empty muted">Loading…</div>}
+          ) : <SkeletonRows />}
       </Card>
     </div>
   );

@@ -9,6 +9,7 @@ import AiExplain from '../components/AiExplain';
 import { ExploreButton } from '../components/Grafana';
 import { AckModal } from './Alerts';
 import { IssueTable } from './Sentry';
+import { PageSkeleton } from '../components/Skeleton';
 
 const ICON = { crit: 'alert', warn: 'alert', ok: 'check', info: 'activity', '': 'activity' };
 
@@ -156,7 +157,7 @@ export default function Incident({ id }) {
       c.crit != null && { value: c.crit, color: '#d6403f', label: `critical ${fmtValue(c.crit, c.unit)}` }].filter(Boolean);
   }, [d]);
 
-  if (!d) return error ? <div className="stack"><a href="#/alerts/active">← Alerts</a><ErrorNote>{error}</ErrorNote></div> : <div className="muted">Loading…</div>;
+  if (!d) return error ? <div className="stack"><a href="#/alerts/active">← Alerts</a><ErrorNote>{error}</ErrorNote></div> : <PageSkeleton />;
   const c = d.container;
   return (
     <div className="stack">

@@ -1,10 +1,11 @@
 import { useApi } from '../api';
 import { Badge, Card, Empty, ErrorNote } from '../components/ui';
 import { fmtAgo, fmtDuration } from '../format';
+import { PageSkeleton } from '../components/Skeleton';
 
 export default function Deploys() {
   const { data, error } = useApi('/deploys', { interval: 60000 });
-  if (!data) return error ? <ErrorNote>{error}</ErrorNote> : <div className="muted">Loading…</div>;
+  if (!data) return error ? <ErrorNote>{error}</ErrorNote> : <PageSkeleton />;
   if (!data.enabled) return <Card><Empty title="No deploy source configured">Set <span className="mono">github.repo</span> (and optionally a token), or <span className="mono">argocd</span>, in nigrani.yaml to see deploys here and as markers on charts.</Empty></Card>;
   return (
     <div className="stack">

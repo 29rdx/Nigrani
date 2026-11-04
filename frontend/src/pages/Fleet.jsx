@@ -2,6 +2,7 @@ import { useApi } from '../api';
 import { Badge, Card, Empty, ErrorNote, Icon, Meter } from '../components/ui';
 import { useApp } from '../ctx';
 import { fmtValue } from '../format';
+import { PageSkeleton } from '../components/Skeleton';
 
 const STATUS = {
   operational: { kind: 'ok', icon: 'check' },
@@ -48,7 +49,7 @@ function ServerCard({ f, onOpen }) {
 export default function Fleet() {
   const { setServer } = useApp();
   const { data, error } = useApi('/fleet', { interval: 15000 });
-  if (!data) return error ? <ErrorNote>{error}</ErrorNote> : <div className="muted">Loading…</div>;
+  if (!data) return error ? <ErrorNote>{error}</ErrorNote> : <PageSkeleton />;
   if (data.length === 0) return <Card><Empty title="No servers configured" /></Card>;
   const open = (id) => { setServer(id); window.location.hash = '/overview'; };
   return (

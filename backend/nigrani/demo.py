@@ -155,8 +155,6 @@ class DemoProm:
         # --- containers ---
         if "container_label_restartcount" in e:
             return self._container_series(e, lambda n, t: 2.0 if n == "worker" else 0.0, "max")
-        if "container_last_seen" in e:
-            return self._container_series(e, lambda n, t: 3.0 + 2 * abs(_noise("seen" + n, t)), "max")
         if "container_cpu_usage_seconds_total" in e:
             base = {"api": 16, "worker": 34, "nginx": 2.5, "redis": 3.5, "postgres": 11}
             gain = {"api": 40, "worker": 8, "postgres": 14}
@@ -179,6 +177,8 @@ class DemoProm:
             return self._container_series(e, lambda n, t: 30_000 * (1 + 0.3 * _noise("rx" + n, t)), "sum")
         if "container_network_transmit_bytes_total" in e:
             return self._container_series(e, lambda n, t: 55_000 * (1 + 0.3 * _noise("tx" + n, t)), "sum")
+        if "container_last_seen" in e:                     # only the plain "age" query: the others carry this in their freshness filter
+            return self._container_series(e, lambda n, t: 3.0 + 2 * abs(_noise("seen" + n, t)), "max")
         # --- targets ---
         if e.strip() == "up" or e.strip().startswith("up{"):
             jobs = [("node-exporter", "node-exporter:9100"), ("cadvisor", "cadvisor:8080"),

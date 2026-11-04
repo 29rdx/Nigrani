@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { ErrorNote, Icon } from '../components/ui';
+import Logo from '../components/Logo';
+import { ErrorNote } from '../components/ui';
 
 export default function Login({ onDone }) {
   const [u, setU] = useState('');
@@ -8,6 +9,7 @@ export default function Login({ onDone }) {
   const [err, setErr] = useState(new URLSearchParams(window.location.search).get('sso_error'));
   const [busy, setBusy] = useState(false);
   const [sso, setSso] = useState(null);
+  const [show, setShow] = useState(false);
 
   useEffect(() => {
     api('/auth/config').then((c) => setSso(c.oidc)).catch(() => {});
@@ -23,9 +25,9 @@ export default function Login({ onDone }) {
   };
 
   return (
-    <div className="login">
-      <form className="card" onSubmit={submit}>
-        <div className="brand" style={{ padding: '0 0 12px' }}><Icon name="activity" size={24} />Nigrani</div>
+    <main className="login">
+      <form className="card" onSubmit={submit} aria-labelledby="login-title">
+        <div className="login-head"><Logo size={44} /><h1 id="login-title">Sign in to Nigrani</h1><p className="muted">Watching your services, so you don’t have to.</p></div>
         {sso && (
           <>
             <a className="btn primary sso" href={sso.login_url}>{sso.label}</a>
@@ -35,10 +37,13 @@ export default function Login({ onDone }) {
         <label className="f" htmlFor="u">Username</label>
         <input id="u" type="text" value={u} onChange={(e) => setU(e.target.value)} autoComplete="username" autoFocus={!sso} />
         <label className="f" htmlFor="p">Password</label>
-        <input id="p" type="password" value={p} onChange={(e) => setP(e.target.value)} autoComplete="current-password" />
+        <div className="pw">
+          <input id="p" type={show ? 'text' : 'password'} value={p} onChange={(e) => setP(e.target.value)} autoComplete="current-password" />
+          <button type="button" className="btn sm" onClick={() => setShow(!show)} aria-pressed={show}>{show ? 'Hide' : 'Show'}</button>
+        </div>
         <div style={{ marginTop: 12 }}><ErrorNote>{err}</ErrorNote></div>
-        <button className="btn primary" style={{ width: '100%', justifyContent: 'center', marginTop: 16 }} disabled={busy || !p || !u}>Sign in</button>
+        <button className="btn primary" style={{ width: '100%', justifyContent: 'center', marginTop: 16 }} disabled={busy || !p || !u}>{busy ? 'Signing in…' : 'Sign in'}</button>
       </form>
-    </div>
+    </main>
   );
 }

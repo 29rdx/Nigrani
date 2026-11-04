@@ -64,7 +64,7 @@ export default function ApiTokens() {
       <ErrorNote>{error || problem}</ErrorNote>
       {data && data.length === 0 ? <Empty title="No tokens yet">Create one to let a script, or an assistant such as Claude Code, read from Nigrani.</Empty> : (
         <div className="scroll"><table className="t">
-          <thead><tr><th>Name</th><th>Access</th><th>Token</th><th>Last used</th><th>Expires</th><th /></tr></thead>
+          <thead><tr><th>Name</th><th>Access</th><th>Token</th><th>Last used</th><th>Expires</th><th><span className="sr">Actions</span></th></tr></thead>
           <tbody>{(data || []).map((t) => (
             <tr key={t.id}>
               <td><b>{t.name}</b><div className="muted" style={{ fontSize: 12 }}>by {t.created_by}</div></td>

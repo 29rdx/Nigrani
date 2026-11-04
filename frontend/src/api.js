@@ -74,3 +74,23 @@ export function useHashRoute() {
   }, []);
   return route;
 }
+
+/** True once Nigrani itself stops answering (two failed health checks in a row); announces recovery with an event. */
+export function useConnectionLost() {
+  const [lost, setLost] = useState(false);
+  useEffect(() => {
+    let fails = 0;
+    const tick = async () => {
+      try {
+        const r = await fetch('/api/health', { cache: 'no-store' });
+        if (!r.ok) throw new Error('unhealthy');
+        if (fails >= 2) window.dispatchEvent(new Event('nigrani:reconnected'));
+        fails = 0; setLost(false);
+      } catch { fails += 1; if (fails >= 2) setLost(true); }
+    };
+    const t = setInterval(tick, 10000);
+    window.addEventListener('online', tick);
+    return () => { clearInterval(t); window.removeEventListener('online', tick); };
+  }, []);
+  return lost;
+}

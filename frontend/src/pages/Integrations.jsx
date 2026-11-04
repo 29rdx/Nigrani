@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, useApi } from '../api';
 import { DiscoveryList } from '../components/Discovery';
 import { Badge, Card, Empty, ErrorNote, Modal, Seg, Toggle } from '../components/ui';
+import { useToast } from '../components/Toast';
 import { useApp } from '../ctx';
 import { fmtAgo } from '../format';
 
@@ -106,6 +107,7 @@ function ChannelModal({ channel, fields, onClose, onSaved }) {
 
 export default function Integrations() {
   const { can } = useApp();
+  const toast = useToast();
   const chans = useApi('/channels', { interval: 20000 });
   const types = useApi('/channel-types');
   const [edit, setEdit] = useState(null);
@@ -114,11 +116,11 @@ export default function Integrations() {
 
   const test = async (c) => {
     setRes((r) => ({ ...r, [c.id]: { busy: true } }));
-    try { const r = await api(`/channels/${c.id}/test`, { method: 'POST' }); setRes((x) => ({ ...x, [c.id]: r })); chans.reload(); }
+    try { const r = await api(`/channels/${c.id}/test`, { method: 'POST' }); setRes((x) => ({ ...x, [c.id]: r })); (r.ok ? toast.ok : toast.err)(r.ok ? `Test message sent to “${c.name}”` : `Test to “${c.name}” failed`); chans.reload(); }
     catch (e) { setRes((x) => ({ ...x, [c.id]: { ok: false, error: e.message } })); }
   };
-  const toggle = async (c, enabled) => { await api('/channels', { method: 'POST', body: { ...c, enabled } }); chans.reload(); };
-  const del = async (c) => { if (window.confirm(`Delete channel "${c.name}"?`)) { await api(`/channels/${c.id}`, { method: 'DELETE' }); chans.reload(); } };
+  const toggle = async (c, enabled) => { if (await toast.run(() => api('/channels', { method: 'POST', body: { ...c, enabled } }), `“${c.name}” ${enabled ? 'enabled' : 'disabled'}`)) chans.reload(); };
+  const del = async (c) => { if (window.confirm(`Delete channel "${c.name}"?`) && await toast.run(() => api(`/channels/${c.id}`, { method: 'DELETE' }), `Deleted “${c.name}”`)) chans.reload(); };
   const sendDigest = async () => { try { setDigest(await api('/digest/send', { method: 'POST' })); } catch (e) { setDigest({ error: e.message }); } };
 
   return (

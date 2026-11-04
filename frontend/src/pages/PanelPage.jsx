@@ -3,12 +3,13 @@ import Chart from '../components/Chart';
 import { Card, Empty, ErrorNote } from '../components/ui';
 import { useApp } from '../ctx';
 import { fmtValue } from '../format';
+import { PageSkeleton } from '../components/Skeleton';
 
 /** Renders any page defined in nigrani.yaml / presets (Traffic, Redis, Postgres, MQTT, ...). */
 export default function PanelPage({ id }) {
   const { range, theme } = useApp();
   const { data, error } = useApi(`/pages/${encodeURIComponent(id)}?range=${range}`, { interval: 30000 });
-  if (!data) return error ? <ErrorNote>{error}</ErrorNote> : <div className="muted">Loading…</div>;
+  if (!data) return error ? <ErrorNote>{error}</ErrorNote> : <PageSkeleton />;
   if (!data.available) {
     return (
       <Card>

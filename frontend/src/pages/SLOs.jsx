@@ -1,5 +1,6 @@
 import { useApi } from '../api';
 import { Badge, Card, Empty, ErrorNote } from '../components/ui';
+import { PageSkeleton } from '../components/Skeleton';
 
 const STATUS = { ok: ['ok', 'Within budget'], warning: ['warn', 'Burning budget'], critical: ['crit', 'Budget in danger'], nodata: ['', 'No data yet'], error: ['warn', 'Cannot evaluate'] };
 const win = (s) => (s % 86400 === 0 ? `${s / 86400}d` : s % 3600 === 0 ? `${s / 3600}h` : `${s / 60}m`);
@@ -40,7 +41,7 @@ function Slo({ s }) {
       </div>
       {s.tiers.length > 0 && (
         <div className="scroll" style={{ marginTop: 12 }}><table className="t">
-          <thead><tr><th>Alert</th><th>Windows</th><th>Burn rate (long / short)</th><th>Alerts above</th><th /></tr></thead>
+          <thead><tr><th>Alert</th><th>Windows</th><th>Burn rate (long / short)</th><th>Alerts above</th><th><span className="sr">Actions</span></th></tr></thead>
           <tbody>{s.tiers.map((t) => (
             <tr key={t.name}>
               <td><b>{{ fast: 'Fast burn', slow: 'Slow burn', daily: 'Steady burn', trend: 'Gradual burn' }[t.name]}</b> <span className="muted">{t.severity}</span></td>
@@ -57,7 +58,7 @@ function Slo({ s }) {
 
 export default function SLOs() {
   const { data, error } = useApi('/slos', { interval: 30000 });
-  if (!data) return error ? <ErrorNote>{error}</ErrorNote> : <div className="muted">Loading…</div>;
+  if (!data) return error ? <ErrorNote>{error}</ErrorNote> : <PageSkeleton />;
   if (data.slos.length === 0) {
     return <Card><Empty title="No SLOs for this server">Add one under <span className="mono">slos:</span> in nigrani.yaml: a target such as 99.9% over 30 days and how to count good and total events (or an uptime check). Nigrani then alerts when the error budget burns too fast. See the README.</Empty></Card>;
   }

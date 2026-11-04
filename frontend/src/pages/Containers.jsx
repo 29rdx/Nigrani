@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { api, useApi } from '../api';
+import { useToast } from '../components/Toast';
 import Chart from '../components/Chart';
 import { Badge, Card, Drawer, Empty, ErrorNote, Meter } from '../components/ui';
 import { useApp } from '../ctx';
@@ -33,6 +34,7 @@ function ContainerDrawer({ c, onClose, onForget }) {
 }
 
 export default function Containers() {
+  const toast = useToast();
   const { data, error, reload } = useApi('/containers', { interval: 15000 });
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all');
@@ -45,7 +47,7 @@ export default function Containers() {
     return true;
   }), [data, q, filter]);
 
-  const forget = async (c) => { await api(`/containers/${encodeURIComponent(c.name)}`, { method: 'DELETE' }); setSel(null); reload(); };
+  const forget = async (c) => { if (await toast.run(() => api(`/containers/${encodeURIComponent(c.name)}`, { method: 'DELETE' }), `Forgot “${c.name}”`)) { setSel(null); reload(); } };
   const up = (data || []).filter((c) => c.up).length;
 
   return (

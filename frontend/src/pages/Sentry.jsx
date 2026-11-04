@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useApi } from '../api';
 import { Badge, Card, Empty, ErrorNote, Icon, Seg } from '../components/ui';
 import { fmtAgo } from '../format';
+import { SkeletonRows } from '../components/Skeleton';
 
 const LEVEL = { fatal: 'crit', error: 'crit', warning: 'warn', info: 'info', debug: '' };
 const SORTS = ['date', 'freq', 'new', 'user', 'priority'];
@@ -63,7 +64,7 @@ export default function Sentry() {
       <ErrorNote>{list.error || summary.error}</ErrorNote>
       <Card flush>
         {list.data && list.data.issues.length === 0 ? <Empty title="No issues match">Try a broader search, for example <span className="mono">is:unresolved</span>.</Empty>
-          : list.data ? <IssueTable issues={list.data.issues} /> : <div className="empty muted">Loading…</div>}
+          : list.data ? <IssueTable issues={list.data.issues} /> : <SkeletonRows />}
       </Card>
     </div>
   );

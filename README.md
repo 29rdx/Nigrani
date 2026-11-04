@@ -30,6 +30,8 @@ docker run --rm -p 8080:8080 -e NIGRANI_DEMO=1 ghcr.io/nikhilrai-tech/nigrani:la
 
 ![Overview](docs/screenshots/overview-dark.png)
 
+<p align="center"><img src="docs/screenshots/command-palette.png" width="70%" alt="The command palette (Ctrl K)" /></p>
+
 ## Why
 
 Grafana is great for exploring metrics but it won't tell you "the disk fills in 1.4 days" or page you when a container
@@ -54,6 +56,7 @@ silently stops. Nigrani answers the operational questions directly:
 
 | | |
 |---|---|
+| **A polished, fast UI** | Dark and light themes, a **command palette** (`Ctrl K`: jump to any page, alert, rule or container), keyboard shortcuts (`g a` for alerts, `?` for the list), toasts for every action, skeleton loading, installable as an app, fully usable on a phone, and accessible (Lighthouse accessibility 100 on every page) |
 | **Overview** | Status banner, key tiles with thresholds, CPU/memory trend, active alerts, uptime checks |
 | **Containers** | Every container: status, CPU, memory (vs limit), restarts, uptime, network. Click for charts and logs. Auto-detects stopped containers |
 | **Host** | CPU, memory, load, network, disk I/O, per-filesystem usage with **days-until-full forecast** |

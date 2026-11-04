@@ -4,6 +4,7 @@ import { Badge, Card, Empty, ErrorNote, Meter } from '../components/ui';
 import { useApp } from '../ctx';
 import { DashboardLinks } from '../components/Grafana';
 import { fmtBytes, fmtDuration, fmtValue } from '../format';
+import { PageSkeleton } from '../components/Skeleton';
 
 function Stat({ label, value, sub }) {
   return <div className="card tile"><div className="t">{label}</div><div className="v" style={{ fontSize: 22 }}>{value}</div>{sub && <div className="thr">{sub}</div>}</div>;
@@ -12,7 +13,7 @@ function Stat({ label, value, sub }) {
 export default function Host() {
   const { range, theme } = useApp();
   const { data, error } = useApi(`/host?range=${range}`, { interval: 30000 });
-  if (!data) return error ? <ErrorNote>{error}</ErrorNote> : <div className="muted">Loading…</div>;
+  if (!data) return error ? <ErrorNote>{error}</ErrorNote> : <PageSkeleton />;
   const { summary: s, series, disks } = data;
   const memUsed = s.mem_total != null && s.mem_avail != null ? s.mem_total - s.mem_avail : null;
   const swapUsed = s.swap_total ? s.swap_total - (s.swap_free || 0) : 0;

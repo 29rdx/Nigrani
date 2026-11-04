@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useApi } from '../api';
 import { Badge, Card, Empty, ErrorNote } from '../components/ui';
 import { fmtDuration } from '../format';
+import { SkeletonRows } from '../components/Skeleton';
 
 const kindOf = (p) => (p.crashloop || ['Failed', 'Unknown', 'Evicted'].includes(p.status) || p.phase === 'Failed' ? 'crit'
   : p.phase === 'Succeeded' ? '' : p.phase === 'Running' && p.ready ? 'ok' : 'warn');
@@ -70,7 +71,7 @@ export default function Kubernetes() {
                 </tr>
               ))}</tbody>
             </table></div>
-          ) : <div className="empty muted">Loading…</div>}
+          ) : <SkeletonRows />}
       </Card>
     </div>
   );

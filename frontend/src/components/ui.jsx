@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { SEV } from '../format';
 
 const PATHS = {
@@ -32,6 +32,7 @@ const PATHS = {
   users: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M9 11a4 4 0 100-8 4 4 0 000 8z M23 21v-2a4 4 0 00-3-3.9 M16 3.1a4 4 0 010 7.8',
   layers: 'M12 2l10 5-10 5L2 7l10-5z M2 17l10 5 10-5 M2 12l10 5 10-5',
   bug: 'M8 2l1.88 1.88 M14.12 3.88L16 2 M9 7.13v-1a3.003 3.003 0 116 0v1 M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 014-4h4a4 4 0 014 4v3c0 3.3-2.7 6-6 6 M12 20v-9 M6.53 9C4.6 8.8 3 7.1 3 5 M6 13H2 M3 21c0-2.1 1.7-3.9 3.8-4 M20.97 5c0 2.1-1.6 3.8-3.5 4 M22 13h-4 M17.2 17c2.1.1 3.8 1.9 3.8 4',
+  search: 'M11 19a8 8 0 100-16 8 8 0 000 16z M21 21l-4.3-4.3',
   sparkle: 'M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z',
   external: 'M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6 M15 3h6v6 M10 14L21 3',
 };
@@ -70,7 +71,7 @@ export function Card({ title, sub, actions, children, flush, className = '' }) {
 }
 
 export function Empty({ title, children }) {
-  return <div className="empty"><h3>{title}</h3><div>{children}</div></div>;
+  return <div className="empty"><h2>{title}</h2><div>{children}</div></div>;
 }
 
 export function ErrorNote({ children }) {
@@ -87,15 +88,35 @@ export function Toggle({ checked, onChange, label }) {
   );
 }
 
-export function Modal({ title, onClose, children, actions }) {
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** Keeps Tab inside the dialog, puts focus in it when it opens and back where it was when it closes. */
+function useFocusTrap(onClose) {
+  const ref = useRef(null);
   useEffect(() => {
-    const k = (e) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', k);
-    return () => window.removeEventListener('keydown', k);
+    const before = document.activeElement;
+    const el = ref.current;
+    if (el && !el.contains(document.activeElement)) (el.querySelector('[autofocus], input, select, textarea') || el.querySelector(FOCUSABLE) || el).focus?.();
+    const key = (e) => {
+      if (e.key === 'Escape') { onClose(); return; }
+      if (e.key !== 'Tab' || !el) return;
+      const nodes = [...el.querySelectorAll(FOCUSABLE)].filter((n) => n.offsetParent !== null);
+      if (nodes.length === 0) { e.preventDefault(); return; }
+      const first = nodes[0]; const last = nodes[nodes.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    window.addEventListener('keydown', key);
+    return () => { window.removeEventListener('keydown', key); if (before && before.focus) before.focus(); };
   }, [onClose]);
+  return ref;
+}
+
+export function Modal({ title, onClose, children, actions }) {
+  const ref = useFocusTrap(onClose);
   return (
     <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label={title} ref={ref} tabIndex={-1}>
         <h2>{title}</h2>
         {children}
         {actions && <div className="actions">{actions}</div>}
@@ -105,14 +126,10 @@ export function Modal({ title, onClose, children, actions }) {
 }
 
 export function Drawer({ onClose, children }) {
-  useEffect(() => {
-    const k = (e) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', k);
-    return () => window.removeEventListener('keydown', k);
-  }, [onClose]);
+  const ref = useFocusTrap(onClose);
   return (
     <div className="drawer-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="drawer" role="dialog" aria-modal="true">{children}</div>
+      <div className="drawer" role="dialog" aria-modal="true" aria-label="Details" ref={ref} tabIndex={-1}>{children}</div>
     </div>
   );
 }

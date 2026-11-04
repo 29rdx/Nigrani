@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api, useApi } from '../api';
 import { ExploreButton } from '../components/Grafana';
+import { useToast } from '../components/Toast';
 import { useApp } from '../ctx';
 import { Badge, Card, Empty, ErrorNote, Icon, Modal, Seg, SevBadge, Toggle } from '../components/ui';
 import { fmtAgo, fmtDateTime, fmtDuration, fmtValue } from '../format';
@@ -24,6 +25,7 @@ function ServerTag({ id }) {
 
 export function RuleModal({ rule, initial, onClose, onSaved }) {
   const { servers, multi, me } = useApp();
+  const toast = useToast();
   const sources = [...new Set(servers.flatMap((s) => s.datasources || ['prometheus']))];
   const [f, setF] = useState(rule ? { ...rule, warn: rule.warn ?? '', crit: rule.crit ?? '' } : { ...BLANK, ...initial });
   const [scope, setScope] = useState((rule?.servers || []).join(', '));
@@ -56,6 +58,7 @@ export function RuleModal({ rule, initial, onClose, onSaved }) {
     setErr(null); setBusy(true);
     try {
       await api(rule ? `/rules/${rule.id}` : '/rules', { method: rule ? 'PUT' : 'POST', body: payload() });
+      toast.ok(rule ? `Saved “${f.name}”` : `Created “${f.name}”`);
       onSaved();
     } catch (e) { setErr(e.message); }
     setBusy(false);
@@ -142,13 +145,14 @@ export function RuleModal({ rule, initial, onClose, onSaved }) {
 const ACK_CHOICES = [['1 hour', 1], ['4 hours', 4], ['24 hours', 24], ['Until it resolves', null]];
 
 export function AckModal({ incident, onClose, onDone }) {
+  const toast = useToast();
   const [note, setNote] = useState('');
   const [hours, setHours] = useState(4);
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
   const save = async () => {
     setBusy(true); setErr(null);
-    try { await api(`/incidents/${incident.id}/ack`, { method: 'POST', body: { hours, note } }); onDone(); }
+    try { await api(`/incidents/${incident.id}/ack`, { method: 'POST', body: { hours, note } }); toast.ok('Acknowledged: reminders are paused'); onDone(); }
     catch (e) { setErr(e.message); setBusy(false); }
   };
   return (
@@ -180,17 +184,18 @@ function AckBadge({ i }) {
 
 function Active({ server }) {
   const { can } = useApp();
+  const toast = useToast();
   const [ackFor, setAckFor] = useState(null);
   const { data, error, reload } = useApi(`/incidents?status=firing${server ? `&server=${server}` : ''}`, { interval: 10000 });
-  const silence = async (i, minutes) => { await api('/silences', { method: 'POST', body: { server: i.server, source_id: i.source_id, match: i.series || null, minutes, reason: 'Silenced from alerts page' } }); reload(); };
-  const unack = async (i) => { await api(`/incidents/${i.id}/ack`, { method: 'DELETE' }); reload(); };
+  const silence = async (i, minutes) => { if (await toast.run(() => api('/silences', { method: 'POST', body: { server: i.server, source_id: i.source_id, match: i.series || null, minutes, reason: 'Silenced from alerts page' } }), `Silenced “${i.rule_name}” for ${minutes >= 60 ? `${minutes / 60} h` : `${minutes} min`}`)) reload(); };
+  const unack = async (i) => { if (await toast.run(() => api(`/incidents/${i.id}/ack`, { method: 'DELETE' }), 'Acknowledgement removed')) reload(); };
   if (!data) return error ? <ErrorNote>{error}</ErrorNote> : null;
   if (!data.length) return <Card><Empty title="Nothing is firing">All rules are inside their thresholds.</Empty></Card>;
   return (
     <>
     <Card flush>
       <div className="scroll"><table className="t">
-        <thead><tr><th>Severity</th><th>Alert</th><th>Value</th><th>Since</th><th /></tr></thead>
+        <thead><tr><th>Severity</th><th>Alert</th><th>Value</th><th>Since</th><th><span className="sr">Actions</span></th></tr></thead>
         <tbody>{data.map((i) => (
           <tr key={i.id}>
             <td><SevBadge sev={i.severity} /></td>
@@ -289,10 +294,11 @@ function HistoryTable({ data }) {
 
 function Rules() {
   const { can } = useApp();
+  const toast = useToast();
   const { data, error, reload } = useApi('/rules', { interval: 20000 });
   const [edit, setEdit] = useState(null);
-  const toggle = async (r, enabled) => { await api(`/rules/${r.id}`, { method: 'PUT', body: { ...r, enabled } }); reload(); };
-  const del = async (r) => { if (window.confirm(`Delete rule "${r.name}"?`)) { await api(`/rules/${r.id}`, { method: 'DELETE' }); reload(); } };
+  const toggle = async (r, enabled) => { if (await toast.run(() => api(`/rules/${r.id}`, { method: 'PUT', body: { ...r, enabled } }), `“${r.name}” ${enabled ? 'enabled' : 'disabled'}`)) reload(); };
+  const del = async (r) => { if (window.confirm(`Delete rule "${r.name}"?`) && await toast.run(() => api(`/rules/${r.id}`, { method: 'DELETE' }), `Deleted “${r.name}”`)) reload(); };
   const thr = (r) => [r.warn != null && `warn ${r.direction === 'below' ? '<' : '>'} ${fmtValue(r.warn, r.unit)}`, r.crit != null && `crit ${r.direction === 'below' ? '<' : '>'} ${fmtValue(r.crit, r.unit)}`].filter(Boolean).join(' · ');
   return (
     <div className="stack">
@@ -300,7 +306,7 @@ function Rules() {
         {can.edit && <button className="btn primary right" onClick={() => setEdit({})}>New rule</button>}</div>
       <ErrorNote>{error}</ErrorNote>
       <Card flush><div className="scroll"><table className="t">
-        <thead><tr><th>On</th><th>Rule</th><th>Thresholds</th><th>For</th><th>State</th><th /></tr></thead>
+        <thead><tr><th>On</th><th>Rule</th><th>Thresholds</th><th>For</th><th>State</th><th><span className="sr">Actions</span></th></tr></thead>
         <tbody>{(data || []).map((r) => (
           <tr key={r.id}>
             <td>{can.edit ? <Toggle checked={r.enabled} onChange={(v) => toggle(r, v)} label={`Enable ${r.name}`} /> : <Badge>{r.enabled ? 'on' : 'off'}</Badge>}</td>
@@ -319,8 +325,9 @@ function Rules() {
 
 function Silences() {
   const { can } = useApp();
+  const toast = useToast();
   const { data, error, reload } = useApi('/silences', { interval: 20000 });
-  const del = async (s) => { await api(`/silences/${s.id}`, { method: 'DELETE' }); reload(); };
+  const del = async (s) => { if (await toast.run(() => api(`/silences/${s.id}`, { method: 'DELETE' }), 'Silence removed')) reload(); };
   if (!data) return error ? <ErrorNote>{error}</ErrorNote> : null;
   if (!data.length) return <Card><Empty title="No active silences">Silence an alert from the Active tab during maintenance.</Empty></Card>;
   return (

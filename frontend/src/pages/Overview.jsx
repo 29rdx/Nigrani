@@ -2,11 +2,13 @@ import { useMemo } from 'react';
 import { api, useApi } from '../api';
 import Chart from '../components/Chart';
 import { DiscoverySuggestions } from '../components/Discovery';
+import { useToast } from '../components/Toast';
 import { DashboardLinks } from '../components/Grafana';
 import Tile from '../components/Tile';
 import { Badge, Card, Empty, ErrorNote, Icon, SevBadge } from '../components/ui';
 import { useApp } from '../ctx';
 import { fmtAgo, fmtValue } from '../format';
+import { PageSkeleton } from '../components/Skeleton';
 
 function Banner({ o }) {
   const b = o.banner;
@@ -29,6 +31,8 @@ export default function Overview() {
   const ov = useApi('/overview', { interval: 15000 });
   const host = useApi(`/host?range=${range}`, { interval: 30000 });
   const deploys = useApi('/deploys', { interval: 60000 });
+  const disc = useApi('/discovery', { interval: 60000 });
+  const toast = useToast();
   const o = ov.data;
 
   const series = useMemo(() => {
@@ -40,16 +44,22 @@ export default function Overview() {
     .filter((r) => r.finished_at && r.conclusion)
     .map((r) => ({ ts: r.finished_at, label: `Deploy ${r.sha} (${r.conclusion})`, color: r.conclusion === 'success' ? undefined : '#d6403f' })), [deploys.data]);
 
-  const silence = async (inc) => { await api('/silences', { method: 'POST', body: { server: inc.server, source_id: inc.source_id, match: inc.series || null, minutes: 60, reason: 'Silenced from overview' } }); ov.reload(); };
+  const silence = async (inc) => {
+    try {
+      await api('/silences', { method: 'POST', body: { server: inc.server, source_id: inc.source_id, match: inc.series || null, minutes: 60, reason: 'Silenced from overview' } });
+      toast.ok(`Silenced “${inc.rule_name}” for 1 hour`); ov.reload();
+    } catch (e) { toast.err(e.message); }
+  };
 
-  if (!o) return ov.error ? <ErrorNote>{ov.error}</ErrorNote> : <div className="muted">Loading…</div>;
+  if (ov.error && !o) return <ErrorNote>{ov.error}</ErrorNote>;
+  if (!o || (disc.loading && !disc.data && !disc.error)) return <PageSkeleton />;   // wait for both, so the suggestions never push the tiles down
   const down = o.containers?.down || [];
   const bad = (o.checks || []).filter((c) => c.ok === false);
 
   return (
     <div>
       <Banner o={o} />
-      <div style={{ marginBottom: 14 }}><DiscoverySuggestions /></div>
+      <div style={{ marginBottom: 14 }}><DiscoverySuggestions shared={disc} /></div>
       <div style={{ marginBottom: 14 }}><DashboardLinks context="overview" /></div>
       <div className="grid tiles">
         {o.tiles.map((t) => <Tile key={t.id} t={t} />)}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api, useApi } from '../api';
 import { useApp } from '../ctx';
+import { useToast } from './Toast';
 import { Badge, Card, ErrorNote, Icon } from './ui';
 
 const LABEL = { enabled: ['ok', 'On'], found: ['info', 'Found'], missing: ['', 'Not detected'] };
@@ -10,8 +11,10 @@ function counts(p) {
     p.rules > 0 && `${p.rules} alert rule${p.rules > 1 ? 's' : ''}`].filter(Boolean).join(', ');
 }
 
-function useDiscovery() {
-  const { data, error, reload } = useApi('/discovery', { interval: 60000 });
+function useDiscovery(shared) {
+  const own = useApi('/discovery', { interval: 60000, enabled: !shared });       // the Overview shares its own fetch so nothing jumps when it arrives
+  const { data, error, reload } = shared || own;
+  const toast = useToast();
   const [busy, setBusy] = useState(null);
   const [err, setErr] = useState(null);
   const change = async (name, on) => {
@@ -20,16 +23,18 @@ function useDiscovery() {
       await api(on ? `/discovery/${name}/enable` : `/discovery/${name}`, { method: on ? 'POST' : 'DELETE' });
       await reload();
       window.dispatchEvent(new Event('nigrani:presets'));          // the menu and the pages list pick the change up
-    } catch (e) { setErr(e.message); }
+      const title = data?.presets?.find((p) => p.name === name)?.title || name;
+      toast.ok(on ? `${title} is on: its page and alert rules are live` : `${title} turned off`);
+    } catch (e) { setErr(e.message); toast.err(e.message); }
     setBusy(null);
   };
   return { data, error, err, busy, change };
 }
 
 /** Overview: "we found Redis in your Prometheus, turn it on?". Shows nothing when there is nothing to suggest. */
-export function DiscoverySuggestions() {
+export function DiscoverySuggestions({ shared }) {
   const { can } = useApp();
-  const { data, err, busy, change } = useDiscovery();
+  const { data, err, busy, change } = useDiscovery(shared);
   const [hidden, setHidden] = useState(false);
   const found = (data?.presets || []).filter((p) => p.status === 'found');
   if (hidden || found.length === 0) return null;
@@ -47,7 +52,6 @@ export function DiscoverySuggestions() {
             {can.edit && <button className="btn primary sm" onClick={() => change(p.name, true)} disabled={busy === p.name}>{busy === p.name ? 'Turning on…' : 'Turn on'}</button>}
           </div>
         ))}
-        <ErrorNote>{err}</ErrorNote>
         {!can.edit && <div className="hint">An editor can turn these on.</div>}
       </div>
     </Card>

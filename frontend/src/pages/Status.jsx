@@ -1,6 +1,7 @@
 import { useApi } from '../api';
 import { Badge, Card, Empty, ErrorNote, Icon } from '../components/ui';
 import { dayClass, fmtDateTime, fmtDuration } from '../format';
+import { PageSkeleton } from '../components/Skeleton';
 
 const TEXT = { operational: 'All systems operational', degraded: 'Partial degradation', major: 'Major outage', maintenance: 'Scheduled maintenance in progress' };
 const KIND = { incident: { kind: 'crit', label: 'Incident' }, maintenance: { kind: 'info', label: 'Maintenance' }, info: { kind: '', label: 'Notice' } };
@@ -33,11 +34,11 @@ export function Announcement({ a }) {
 /** Public status page (enabled with status_page.enabled). No login, minimal data. */
 export default function Status() {
   const { data, error } = useApi('/public/status', { interval: 30000 });
-  if (error) return <div className="pub"><ErrorNote>{error}</ErrorNote></div>;
-  if (!data) return <div className="pub muted">Loading…</div>;
+  if (error) return <main className="pub"><ErrorNote>{error}</ErrorNote></main>;
+  if (!data) return <main className="pub"><PageSkeleton /></main>;
   const notes = data.announcements || [];
   return (
-    <div className="pub stack">
+    <main className="pub stack">
       <h1 style={{ margin: 0 }}>{data.title}</h1>
       <div className={`banner ${data.status}`}><Icon name={data.status === 'operational' ? 'check' : 'alert'} size={26} /><h2>{TEXT[data.status]}</h2></div>
       {notes.length > 0 && <Card title="Updates" flush><div className="list">{notes.map((a) => <Announcement key={a.id} a={a} />)}</div></Card>}
@@ -60,6 +61,6 @@ export default function Status() {
               <span className="muted right">{fmtDateTime(i.started_at)} · {i.resolved_at ? `resolved after ${fmtDuration(i.resolved_at - i.started_at)}` : 'ongoing'}</span></div>))}</div>
         )}
       </Card>
-    </div>
+    </main>
   );
 }

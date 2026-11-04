@@ -68,7 +68,7 @@ export default function Users() {
       <ErrorNote>{error || problem}</ErrorNote>
       <Card flush>
         <div className="scroll"><table className="t">
-          <thead><tr><th>User</th><th>Role</th><th>Sign-in</th><th>Last seen</th><th>Active</th><th /></tr></thead>
+          <thead><tr><th>User</th><th>Role</th><th>Sign-in</th><th>Last seen</th><th>Active</th><th><span className="sr">Actions</span></th></tr></thead>
           <tbody>{(data || []).map((u) => {
             const config = u.provider === 'config';
             const self = u.username === me.user;
