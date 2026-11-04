@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Changed
+- **UI, second pass.** Charts: drag to zoom (every chart on the page together, "Reset zoom" or double-click to undo), one shared crosshair, a legend that highlights on hover and
+  hides a series on click, and a y axis that fits the data (a 6% error rate is readable instead of a flat line on 0-100). Sortable columns on Containers, Active alerts and Rules;
+  Active alerts get a severity filter and search; the tab title and favicon show how many alerts are firing; copy-link and copy-summary on an incident, with a breadcrumb;
+  a compact-spacing option in the account menu; and a setup checklist on the Overview for new installs (notifications, suggested dashboards, uptime checks).
 - **A production-grade UI.** A command palette (`Ctrl/Cmd K` or `/`: pages, alerts, rules, containers, actions), keyboard shortcuts (`g` then `o a c h u i d s`, `?`
   for help), an account menu, toasts that confirm every action and report failures instead of failing silently, an error boundary so one broken page
   does not blank the app, a "can't reach Nigrani" banner, skeleton loading instead of "Loading…", and Inter bundled with the app (works offline).
@@ -14,6 +18,7 @@ All notable changes to this project are documented here. The format follows
   100 on every page. A new logo, favicon, web app manifest and meta tags; the login page is redesigned.
 
 ### Fixed
+- Chart tooltips put series names (which come from monitored systems) into HTML unescaped; they are now escaped.
 - Demo mode showed every container metric as the same few bytes/seconds (the demo answered all container queries with the age query).
 
 ## [0.6.0] - 2026-11-03

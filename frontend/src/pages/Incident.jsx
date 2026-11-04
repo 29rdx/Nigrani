@@ -6,6 +6,7 @@ import { useApp } from '../ctx';
 import { fmtAgo, fmtClock, fmtDateTime, fmtDuration, fmtValue } from '../format';
 import { buildTimeline, whatChanged } from '../incident';
 import AiExplain from '../components/AiExplain';
+import { useToast } from '../components/Toast';
 import { ExploreButton } from '../components/Grafana';
 import { AckModal } from './Alerts';
 import { IssueTable } from './Sentry';
@@ -19,8 +20,13 @@ function Header({ d, reload }) {
   const [acking, setAcking] = useState(false);
   const firing = i.status === 'firing';
   const end = i.resolved_at || Date.now() / 1000;
-  const unack = async () => { await api(`/incidents/${i.id}/ack`, { method: 'DELETE' }); reload(); };
-  const silence = async () => { await api('/silences', { method: 'POST', body: { server: i.server, source_id: i.source_id, match: i.series || null, minutes: 60, reason: 'Silenced from the incident page' } }); reload(); };
+  const toast = useToast();
+  const unack = async () => { if (await toast.run(() => api(`/incidents/${i.id}/ack`, { method: 'DELETE' }), 'Acknowledgement removed')) reload(); };
+  const silence = async () => { if (await toast.run(() => api('/silences', { method: 'POST', body: { server: i.server, source_id: i.source_id, match: i.series || null, minutes: 60, reason: 'Silenced from the incident page' } }), 'Silenced for 1 hour')) reload(); };
+  const copy = async (text, what) => {                                  // for pasting into chat or a ticket
+    try { await navigator.clipboard.writeText(text); toast.ok(`${what} copied`); } catch { toast.err('Copy failed: your browser blocked clipboard access'); }
+  };
+  const summary = `${i.rule_name}${i.series ? ` · ${i.series}` : ''} (${i.severity}, ${firing ? 'firing' : 'resolved'})\nStarted ${fmtDateTime(i.started_at)}, ${firing ? 'going for' : 'lasted'} ${fmtDuration(end - i.started_at)}\nValue ${fmtValue(i.last_value, i.unit)}, peak ${fmtValue(i.peak_value, i.unit)}, threshold ${fmtValue(i.threshold, i.unit)}\n${window.location.href}`;
   return (
     <Card>
       <div className="row wrap">
@@ -29,8 +35,12 @@ function Header({ d, reload }) {
         {multi && <Badge kind="info">{servers.find((s) => s.id === i.server)?.name || i.server}</Badge>}
         {i.acked_at && <Badge kind="info" icon="check">acknowledged by {i.acked_by}</Badge>}
         {i.silenced && <Badge>silenced</Badge>}
+        <span className="right row">
+          <button className="btn sm" onClick={() => copy(window.location.href, 'Link')}>Copy link</button>
+          <button className="btn sm" onClick={() => copy(summary, 'Summary')}>Copy summary</button>
+        </span>
         {firing && can.edit && (
-          <span className="right row">
+          <span className="row">
             {i.acked_at ? <button className="btn sm" onClick={unack}>Un-acknowledge</button> : <button className="btn sm" onClick={() => setAcking(true)}>Acknowledge</button>}
             <button className="btn sm" onClick={silence}>Silence 1h</button>
           </span>
@@ -161,19 +171,19 @@ export default function Incident({ id }) {
   const c = d.container;
   return (
     <div className="stack">
-      <div><a href="#/alerts/active">← Alerts</a></div>
+      <nav className="crumbs" aria-label="Breadcrumb"><a href="#/alerts/active">Alerts</a><span aria-hidden="true">/</span><span aria-current="page">Incident #{id}</span></nav>
       <Header d={d} reload={reload} />
       <AiExplain id={id} />
       <Changed d={d} />
       {d.chart && (
         <Card title={d.chart.name} sub="dashed lines: thresholds, deploys, restarts and when it fired">
-          <Chart series={d.chart.series} unit={d.chart.unit} markers={markers} thresholds={thresholds} theme={theme} />
+          <Chart sync="incident" label={d.chart.name} series={d.chart.series} unit={d.chart.unit} markers={markers} thresholds={thresholds} theme={theme} />
         </Card>
       )}
       {c && (
         <div className="grid g2">
-          <Card title={`${c.name}: CPU`}><Chart series={[{ name: 'CPU', points: c.cpu }]} unit="percent" kind="area" height={150} markers={markers} theme={theme} legend={false} /></Card>
-          <Card title={`${c.name}: memory`}><Chart series={[{ name: 'Memory', points: c.mem }]} unit="bytes" kind="area" height={150} markers={markers} theme={theme} legend={false} /></Card>
+          <Card title={`${c.name}: CPU`}><Chart sync="incident" label="CPU" series={[{ name: 'CPU', points: c.cpu }]} unit="percent" kind="area" height={150} markers={markers} theme={theme} legend={false} /></Card>
+          <Card title={`${c.name}: memory`}><Chart sync="incident" label="Memory" series={[{ name: 'Memory', points: c.mem }]} unit="bytes" kind="area" height={150} markers={markers} theme={theme} legend={false} /></Card>
         </div>
       )}
       {d.sentry && (

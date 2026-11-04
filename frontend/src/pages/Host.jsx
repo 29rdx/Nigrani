@@ -29,10 +29,10 @@ export default function Host() {
         <Stat label="Uptime" value={fmtDuration(s.uptime)} />
       </div>
       <div className="grid g2">
-        <Card title="CPU usage"><Chart series={[S('CPU', series.cpu), S('I/O wait', series.iowait)].filter((x) => x.points.length)} unit="percent" kind="area" theme={theme} /></Card>
-        <Card title="Memory usage"><Chart series={[S('Memory', series.mem)].filter((x) => x.points.length)} unit="percent" kind="area" theme={theme} /></Card>
-        <Card title="Network"><Chart series={[S('Receive', series.rx), S('Transmit', series.tx)].filter((x) => x.points.length)} unit="bps" theme={theme} /></Card>
-        <Card title="Disk I/O"><Chart series={[S('Read', series.disk_r), S('Write', series.disk_w)].filter((x) => x.points.length)} unit="bps" theme={theme} /></Card>
+        <Card title="CPU usage"><Chart sync="host" series={[S('CPU', series.cpu), S('I/O wait', series.iowait)].filter((x) => x.points.length)} unit="percent" kind="area" theme={theme} /></Card>
+        <Card title="Memory usage"><Chart sync="host" series={[S('Memory', series.mem)].filter((x) => x.points.length)} unit="percent" kind="area" theme={theme} /></Card>
+        <Card title="Network"><Chart sync="host" series={[S('Receive', series.rx), S('Transmit', series.tx)].filter((x) => x.points.length)} unit="bps" theme={theme} /></Card>
+        <Card title="Disk I/O"><Chart sync="host" series={[S('Read', series.disk_r), S('Write', series.disk_w)].filter((x) => x.points.length)} unit="bps" theme={theme} /></Card>
       </div>
       <Card title="Disks" flush>
         {disks.length === 0 ? <Empty title="No filesystems found">node-exporter needs access to the host filesystem (mount <span className="mono">/</span> read-only).</Empty> : (

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { api, useApi } from '../api';
 import Chart from '../components/Chart';
 import { DiscoverySuggestions } from '../components/Discovery';
+import SetupChecklist from '../components/SetupChecklist';
 import { useToast } from '../components/Toast';
 import { DashboardLinks } from '../components/Grafana';
 import Tile from '../components/Tile';
@@ -27,11 +28,12 @@ function Banner({ o }) {
 }
 
 export default function Overview() {
-  const { range, theme, can } = useApp();
+  const { range, theme, can, me } = useApp();
   const ov = useApi('/overview', { interval: 15000 });
   const host = useApi(`/host?range=${range}`, { interval: 30000 });
   const deploys = useApi('/deploys', { interval: 60000 });
   const disc = useApi('/discovery', { interval: 60000 });
+  const chans = useApi('/channels', { interval: 60000, enabled: !!can.edit && !me.demo });
   const toast = useToast();
   const o = ov.data;
 
@@ -52,13 +54,14 @@ export default function Overview() {
   };
 
   if (ov.error && !o) return <ErrorNote>{ov.error}</ErrorNote>;
-  if (!o || (disc.loading && !disc.data && !disc.error)) return <PageSkeleton />;   // wait for both, so the suggestions never push the tiles down
+  if (!o || (disc.loading && !disc.data && !disc.error) || (can.edit && !me.demo && chans.loading && !chans.data && !chans.error)) return <PageSkeleton />;   // wait for both, so the suggestions never push the tiles down
   const down = o.containers?.down || [];
   const bad = (o.checks || []).filter((c) => c.ok === false);
 
   return (
     <div>
       <Banner o={o} />
+      <div style={{ marginBottom: 14 }}><SetupChecklist o={o} disc={disc.data} channels={chans.data} /></div>
       <div style={{ marginBottom: 14 }}><DiscoverySuggestions shared={disc} /></div>
       <div style={{ marginBottom: 14 }}><DashboardLinks context="overview" /></div>
       <div className="grid tiles">
@@ -85,7 +88,7 @@ export default function Overview() {
 
       <div className="grid g2" style={{ marginTop: 14 }}>
         <Card title="CPU & memory" sub={range} actions={deploys.data?.enabled && <span className="muted">dashed lines = deploys</span>}>
-          {host.error && !series.length ? <ErrorNote>{host.error}</ErrorNote> : <Chart series={series} unit="percent" kind="line" markers={markers} theme={theme} />}
+          {host.error && !series.length ? <ErrorNote>{host.error}</ErrorNote> : <Chart label="CPU and memory" series={series} unit="percent" kind="line" markers={markers} theme={theme} />}
         </Card>
         <Card title="Active alerts" flush actions={<a href="#/alerts">All alerts</a>}>
           {o.incidents.length === 0 ? <Empty title="Nothing firing">All rules are within their thresholds.</Empty> : (

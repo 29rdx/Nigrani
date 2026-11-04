@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { api, useApi } from '../api';
+import { SortTh, useSort } from '../components/SortTh';
 import { useToast } from '../components/Toast';
 import Chart from '../components/Chart';
 import { Badge, Card, Drawer, Empty, ErrorNote, Meter } from '../components/ui';
@@ -23,9 +24,9 @@ function ContainerDrawer({ c, onClose, onForget }) {
       <div style={{ marginBottom: 12 }}><DashboardLinks context="container" container={c.name} /></div>
       <ErrorNote>{m.error}</ErrorNote>
       <div className="stack">
-        <Card title="CPU"><Chart series={d ? [{ name: 'CPU', points: d.cpu }] : []} unit="percent" kind="area" height={150} theme={theme} /></Card>
-        <Card title="Memory"><Chart series={d ? [{ name: 'Working set', points: d.mem }] : []} unit="bytes" kind="area" height={150} theme={theme} /></Card>
-        <Card title="Network"><Chart series={d ? [{ name: 'Receive', points: d.rx }, { name: 'Transmit', points: d.tx }] : []} unit="bps" height={150} theme={theme} /></Card>
+        <Card title="CPU"><Chart sync="container" series={d ? [{ name: 'CPU', points: d.cpu }] : []} unit="percent" kind="area" height={150} theme={theme} /></Card>
+        <Card title="Memory"><Chart sync="container" series={d ? [{ name: 'Working set', points: d.mem }] : []} unit="bytes" kind="area" height={150} theme={theme} /></Card>
+        <Card title="Network"><Chart sync="container" series={d ? [{ name: 'Receive', points: d.rx }, { name: 'Transmit', points: d.tx }] : []} unit="bps" height={150} theme={theme} /></Card>
         {me?.features?.logs && <Card title="Recent logs"><Logs embedded container={c.name} /></Card>}
         {c.auto && can.edit && <button className="btn danger" onClick={() => onForget(c)}>Stop tracking this container</button>}
       </div>
@@ -40,12 +41,14 @@ export default function Containers() {
   const [filter, setFilter] = useState('all');
   const [sel, setSel] = useState(null);
 
-  const rows = useMemo(() => (data || []).filter((c) => {
+  const sort = useSort({ status: (c) => (c.up ? 1 : 0), name: (c) => c.service || c.name, cpu: (c) => c.cpu, mem: (c) => c.mem_pct ?? c.mem,
+    restarts: (c) => c.restarts_1h || 0, uptime: (c) => (c.up ? c.uptime : null), net: (c) => (c.rx || 0) + (c.tx || 0) });
+  const rows = useMemo(() => sort.apply((data || []).filter((c) => {
     if (q && !`${c.name} ${c.service || ''}`.toLowerCase().includes(q.toLowerCase())) return false;
     if (filter === 'down') return !c.up;
     if (filter === 'restarting') return (c.restarts_1h || 0) > 0;
     return true;
-  }), [data, q, filter]);
+  })), [data, q, filter, sort.apply]);
 
   const forget = async (c) => { if (await toast.run(() => api(`/containers/${encodeURIComponent(c.name)}`, { method: 'DELETE' }), `Forgot “${c.name}”`)) { setSel(null); reload(); } };
   const up = (data || []).filter((c) => c.up).length;
@@ -64,7 +67,7 @@ export default function Containers() {
         {data && rows.length === 0 ? <Empty title="No containers match">Make sure cAdvisor is scraped by Prometheus.</Empty> : (
           <div className="scroll">
             <table className="t">
-              <thead><tr><th>Status</th><th>Container</th><th>CPU</th><th>Memory</th><th>Restarts (1h)</th><th>Uptime</th><th>Net in / out</th></tr></thead>
+              <thead><tr><SortTh label="Status" k="status" sort={sort} /><SortTh label="Container" k="name" sort={sort} /><SortTh label="CPU" k="cpu" sort={sort} /><SortTh label="Memory" k="mem" sort={sort} /><SortTh label="Restarts (1h)" k="restarts" sort={sort} /><SortTh label="Uptime" k="uptime" sort={sort} /><SortTh label="Net in / out" k="net" sort={sort} /></tr></thead>
               <tbody>
                 {rows.map((c) => (
                   <tr key={c.name} className="click" onClick={() => setSel(c)} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && setSel(c)}>

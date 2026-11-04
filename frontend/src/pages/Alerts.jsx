@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { api, useApi } from '../api';
 import { ExploreButton } from '../components/Grafana';
+import { SortTh, useSort } from '../components/SortTh';
 import { useToast } from '../components/Toast';
+import { SEVERITY_RANK } from '../sort';
 import { useApp } from '../ctx';
 import { Badge, Card, Empty, ErrorNote, Icon, Modal, Seg, SevBadge, Toggle } from '../components/ui';
 import { fmtAgo, fmtDateTime, fmtDuration, fmtValue } from '../format';
@@ -186,17 +188,30 @@ function Active({ server }) {
   const { can } = useApp();
   const toast = useToast();
   const [ackFor, setAckFor] = useState(null);
+  const [sev, setSev] = useState('all');
+  const [q, setQ] = useState('');
+  const sort = useSort({ severity: (i) => SEVERITY_RANK[i.severity] ?? 9, alert: (i) => i.rule_name, value: (i) => i.last_value, since: (i) => i.started_at });
   const { data, error, reload } = useApi(`/incidents?status=firing${server ? `&server=${server}` : ''}`, { interval: 10000 });
   const silence = async (i, minutes) => { if (await toast.run(() => api('/silences', { method: 'POST', body: { server: i.server, source_id: i.source_id, match: i.series || null, minutes, reason: 'Silenced from alerts page' } }), `Silenced “${i.rule_name}” for ${minutes >= 60 ? `${minutes / 60} h` : `${minutes} min`}`)) reload(); };
   const unack = async (i) => { if (await toast.run(() => api(`/incidents/${i.id}/ack`, { method: 'DELETE' }), 'Acknowledgement removed')) reload(); };
   if (!data) return error ? <ErrorNote>{error}</ErrorNote> : null;
   if (!data.length) return <Card><Empty title="Nothing is firing">All rules are inside their thresholds.</Empty></Card>;
+  const counts = { critical: data.filter((i) => i.severity === 'critical').length, warning: data.filter((i) => i.severity === 'warning').length };
+  const shown = sort.apply(data.filter((i) => (sev === 'all' || i.severity === sev) && (!q || `${i.rule_name} ${i.series || ''} ${i.summary || ''}`.toLowerCase().includes(q.toLowerCase()))));
   return (
     <>
+    <div className="row wrap" style={{ marginBottom: 12 }}>
+      <div className="seg" role="group" aria-label="Severity">
+        {[['all', `All ${data.length}`], ['critical', `Critical ${counts.critical}`], ['warning', `Warning ${counts.warning}`]].map(([k, l]) => <button key={k} className={sev === k ? 'on' : ''} aria-pressed={sev === k} onClick={() => setSev(k)}>{l}</button>)}
+      </div>
+      <input type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter alerts…" aria-label="Filter alerts" style={{ maxWidth: 260 }} />
+      <span className="muted right">Updates every 10 s</span>
+    </div>
     <Card flush>
+      {shown.length === 0 ? <Empty title="No alerts match">Change the filter to see the other {data.length - shown.length}.</Empty> : (
       <div className="scroll"><table className="t">
-        <thead><tr><th>Severity</th><th>Alert</th><th>Value</th><th>Since</th><th><span className="sr">Actions</span></th></tr></thead>
-        <tbody>{data.map((i) => (
+        <thead><tr><SortTh label="Severity" k="severity" sort={sort} /><SortTh label="Alert" k="alert" sort={sort} /><SortTh label="Value" k="value" sort={sort} /><SortTh label="Since" k="since" sort={sort} /><th><span className="sr">Actions</span></th></tr></thead>
+        <tbody>{shown.map((i) => (
           <tr key={i.id}>
             <td><SevBadge sev={i.severity} /></td>
             <td><a href={`#/incident/${i.id}`}><b>{i.rule_name}</b></a>{i.series && <span className="muted"> · {i.series}</span>} <ServerTag id={i.server} /><div className="muted" style={{ fontSize: 12.5 }}>{i.summary}</div></td>
@@ -207,7 +222,7 @@ function Active({ server }) {
               <button className="btn sm" onClick={() => silence(i, 60)}>Silence 1h</button> <button className="btn sm" onClick={() => silence(i, 1440)}>24h</button></>}</td>
           </tr>
         ))}</tbody>
-      </table></div>
+      </table></div>)}
     </Card>
     {ackFor && <AckModal incident={ackFor} onClose={() => setAckFor(null)} onDone={() => { setAckFor(null); reload(); }} />}
     </>
@@ -297,6 +312,7 @@ function Rules() {
   const toast = useToast();
   const { data, error, reload } = useApi('/rules', { interval: 20000 });
   const [edit, setEdit] = useState(null);
+  const sort = useSort({ on: (r) => (r.enabled ? 1 : 0), rule: (r) => r.name, for: (r) => r.for_seconds });
   const toggle = async (r, enabled) => { if (await toast.run(() => api(`/rules/${r.id}`, { method: 'PUT', body: { ...r, enabled } }), `“${r.name}” ${enabled ? 'enabled' : 'disabled'}`)) reload(); };
   const del = async (r) => { if (window.confirm(`Delete rule "${r.name}"?`) && await toast.run(() => api(`/rules/${r.id}`, { method: 'DELETE' }), `Deleted “${r.name}”`)) reload(); };
   const thr = (r) => [r.warn != null && `warn ${r.direction === 'below' ? '<' : '>'} ${fmtValue(r.warn, r.unit)}`, r.crit != null && `crit ${r.direction === 'below' ? '<' : '>'} ${fmtValue(r.crit, r.unit)}`].filter(Boolean).join(' · ');
@@ -306,8 +322,8 @@ function Rules() {
         {can.edit && <button className="btn primary right" onClick={() => setEdit({})}>New rule</button>}</div>
       <ErrorNote>{error}</ErrorNote>
       <Card flush><div className="scroll"><table className="t">
-        <thead><tr><th>On</th><th>Rule</th><th>Thresholds</th><th>For</th><th>State</th><th><span className="sr">Actions</span></th></tr></thead>
-        <tbody>{(data || []).map((r) => (
+        <thead><tr><SortTh label="On" k="on" sort={sort} /><SortTh label="Rule" k="rule" sort={sort} /><th>Thresholds</th><SortTh label="For" k="for" sort={sort} /><th>State</th><th><span className="sr">Actions</span></th></tr></thead>
+        <tbody>{sort.apply(data || []).map((r) => (
           <tr key={r.id}>
             <td>{can.edit ? <Toggle checked={r.enabled} onChange={(v) => toggle(r, v)} label={`Enable ${r.name}`} /> : <Badge>{r.enabled ? 'on' : 'off'}</Badge>}</td>
             <td><b>{r.name}</b> {r.datasource === 'loki' && <Badge>logs</Badge>}{r.datasource === 'sentry' && <Badge>sentry</Badge>}{r.datasource === 'cloudwatch' && <Badge>aws</Badge>}{r.datasource === 'kubernetes' && <Badge>k8s</Badge>}{r.datasource === 'datadog' && <Badge>datadog</Badge>}{r.datasource === 'azure' && <Badge>azure</Badge>}{r.datasource === 'argocd' && <Badge>argo cd</Badge>} {r.servers?.length > 0 && <Badge kind="info">only: {r.servers.join(', ')}</Badge>}<div className="mono muted" style={{ maxWidth: 420, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.expr}>{r.expr}</div></td>

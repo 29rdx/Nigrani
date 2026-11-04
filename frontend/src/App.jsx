@@ -9,6 +9,7 @@ import { ToastProvider, useToast } from './components/Toast';
 import UserMenu from './components/UserMenu';
 import { Icon, Seg } from './components/ui';
 import { gotoRoute, isTyping } from './palette';
+import { faviconHref, pageTitle } from './brand';
 import { AppCtx, useApp } from './ctx';
 import { lsGet, lsSet } from './format';
 const Alerts = page(() => import('./pages/Alerts'));
@@ -80,6 +81,9 @@ function useTheme() {
 function Shell({ me, onLogout }) {
   const [range, setRangeState] = useState(() => (RANGES.includes(lsGet('nigrani.range', '')) ? lsGet('nigrani.range', '1h') : '1h'));
   const [theme, toggleTheme] = useTheme();
+  const [density, setDensityState] = useState(() => lsGet('nigrani.density', 'comfortable'));
+  useEffect(() => { document.documentElement.dataset.density = density; }, [density]);
+  const setDensity = (d) => { setDensityState(d); lsSet('nigrani.density', d); };
   const [server, setServerState] = useState(() => {
     const saved = lsGet('nigrani.server', '');
     return me.servers.some((s) => s.id === saved) ? saved : me.default_server;
@@ -87,7 +91,7 @@ function Shell({ me, onLogout }) {
   setCurrentServer(server); // keep imperative api() calls pointed at the selected server
   const setServer = (id) => { setCurrentServer(id); setServerState(id); lsSet('nigrani.server', id); };
   const multi = me.servers.length > 1;
-  const ctx = useMemo(() => ({ range, theme, me, can: me.can || { edit: false, admin: false }, server, servers: me.servers, multi, setServer }), [range, theme, me, server, multi]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ctx = useMemo(() => ({ range, theme, density, setDensity, me, can: me.can || { edit: false, admin: false }, server, servers: me.servers, multi, setServer }), [range, theme, density, me, server, multi]); // eslint-disable-line react-hooks/exhaustive-deps
   const setRange = (r) => { setRangeState(r); lsSet('nigrani.range', r); };
   return (
     <AppCtx.Provider value={ctx}>
@@ -98,7 +102,7 @@ function Shell({ me, onLogout }) {
 
 // Everything below the provider, so its useApi() calls follow the selected server.
 function Layout({ me, onLogout, toggleTheme, setRange }) {
-  const { range, theme, server, setServer, multi } = useApp();
+  const { range, theme, density, setDensity, server, setServer, multi } = useApp();
   const route = useHashRoute();
   const [open, setOpen] = useState(false);
   const [palette, setPalette] = useState(false);
@@ -168,7 +172,12 @@ function Layout({ me, onLogout, toggleTheme, setRange }) {
   const current = section === 'p' ? `p/${sub}` : section === 'incident' ? 'alerts' : section;
   const all = [...nav.items, ...nav.extra, ...nav.tail];
   const title = section === 'incident' ? 'Incident' : (all.find((n) => n.key === current)?.label || 'Overview');
-  useEffect(() => { document.title = `${title} · ${me.app}`; }, [title, me.app]);
+  const firingCount = firing.data?.length || 0;
+  useEffect(() => { document.title = pageTitle(firingCount, title, me.app); }, [firingCount, title, me.app]);
+  useEffect(() => {                                       // a red dot on the favicon while something is firing
+    const link = document.querySelector('link[rel="icon"]');
+    if (link) { link.type = 'image/svg+xml'; link.href = firingCount > 0 ? faviconHref(firingCount) : '/favicon.svg'; }
+  }, [firingCount]);
 
   let view;
   switch (section) {
@@ -232,7 +241,7 @@ function Layout({ me, onLogout, toggleTheme, setRange }) {
             {['overview', 'host', 'p', 'containers'].includes(section || 'overview') && <Seg value={range} options={RANGES} onChange={setRange} />}
             <button className="search-btn" onClick={() => setPalette(true)} aria-label="Search (Ctrl K)"><Icon name="search" size={15} /><span>Search…</span><kbd>Ctrl K</kbd></button>
             <button className="btn icon" onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}><Icon name={theme === 'dark' ? 'sun' : 'moon'} /></button>
-            <UserMenu me={me} theme={theme} onTheme={toggleTheme} onHelp={() => setHelp(true)} onLogout={onLogout} />
+            <UserMenu me={me} theme={theme} onTheme={toggleTheme} density={density} onDensity={setDensity} onHelp={() => setHelp(true)} onLogout={onLogout} />
           </header>
           <main id="main" tabIndex={-1} className="content" key={server}>
             <ErrorBoundary key={route}><Suspense fallback={<PageSkeleton />}>{view}</Suspense></ErrorBoundary>

@@ -26,7 +26,7 @@ export default function PanelPage({ id }) {
         <Card key={p.title} title={p.title} className={p.wide ? 'wide' : ''}>
           {p.error ? <ErrorNote>{p.error}</ErrorNote>
             : p.kind === 'stat' ? <div className="tile"><div className="v">{fmtValue(p.value, p.unit)}</div></div>
-              : <Chart series={p.series} unit={p.unit} kind={p.kind} theme={theme} />}
+              : <Chart sync={`page-${id}`} label={p.title} series={p.series} unit={p.unit} kind={p.kind} theme={theme} />}
           {p.description && <div className="hint">{p.description}</div>}
         </Card>
       ))}
