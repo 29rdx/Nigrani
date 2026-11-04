@@ -32,6 +32,8 @@ docker run --rm -p 8080:8080 -e NIGRANI_DEMO=1 ghcr.io/nikhilrai-tech/nigrani:la
 
 <p align="center"><img src="docs/screenshots/command-palette.png" width="49%" alt="The command palette (Ctrl K)" /> <img src="docs/screenshots/charts-zoom.png" width="49%" alt="Charts zoomed together with a shared crosshair" /></p>
 
+<p align="center"><img src="docs/screenshots/appearance.png" width="49%" alt="Appearance: mode, accent colour and spacing" /> <img src="docs/screenshots/overview-light.png" width="49%" alt="The light theme" /></p>
+
 ## Why
 
 Grafana is great for exploring metrics but it won't tell you "the disk fills in 1.4 days" or page you when a container
@@ -56,7 +58,7 @@ silently stops. Nigrani answers the operational questions directly:
 
 | | |
 |---|---|
-| **A polished, fast UI** | Dark and light themes, a **command palette** (`Ctrl K`: jump to any page, alert, rule or container), keyboard shortcuts (`g a` for alerts, `?` for the list), toasts for every action, skeleton loading, installable as an app, fully usable on a phone, and accessible (Lighthouse accessibility 100 on every page). Charts zoom by dragging (all charts on a page together), share one crosshair, and have a legend you can click to hide a series; tables sort; the tab title and favicon show how many alerts are firing; new installs get a setup checklist |
+| **A polished, fast UI** | Dark and light themes on a graphite palette with five accent colours (Violet by default, Emerald, Ember, Rose, Mono) chosen under **Appearance**, a **command palette** (`Ctrl K`: jump to any page, alert, rule or container), keyboard shortcuts (`g a` for alerts, `?` for the list), toasts for every action, skeleton loading, installable as an app, fully usable on a phone, and accessible (Lighthouse accessibility 100 on every page). Charts zoom by dragging (all charts on a page together), share one crosshair, and have a legend you can click to hide a series; tables sort; the tab title and favicon show how many alerts are firing; new installs get a setup checklist |
 | **Overview** | Status banner, key tiles with thresholds, CPU/memory trend, active alerts, uptime checks |
 | **Containers** | Every container: status, CPU, memory (vs limit), restarts, uptime, network. Click for charts and logs. Auto-detects stopped containers |
 | **Host** | CPU, memory, load, network, disk I/O, per-filesystem usage with **days-until-full forecast** |

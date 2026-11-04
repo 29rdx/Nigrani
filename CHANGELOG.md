@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Changed
+- **A new look.** The navy-and-blue palette is replaced by neutral graphite (dark) and warm paper (light), with the accent colour chosen under **Appearance** in the
+  account menu: Violet (the default, so it never looks like a status colour), Emerald, Ember, Rose or Mono, each with its own light and dark tones, plus mode (system, light,
+  dark) and spacing. The choice is remembered, applied before the first paint (no flash), can be previewed with `?accent=ember&theme=light`, and recolours the charts, the
+  logo and the favicon. Status colours (green, amber, red) are the same in every accent. Contrast was checked for every accent in both modes (Lighthouse accessibility 100).
 - **UI, second pass.** Charts: drag to zoom (every chart on the page together, "Reset zoom" or double-click to undo), one shared crosshair, a legend that highlights on hover and
   hides a series on click, and a y axis that fits the data (a 6% error rate is readable instead of a flat line on 0-100). Sortable columns on Containers, Active alerts and Rules;
   Active alerts get a severity filter and search; the tab title and favicon show how many alerts are firing; copy-link and copy-summary on an incident, with a breadcrumb;

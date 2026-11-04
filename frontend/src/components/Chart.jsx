@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import uPlot from 'uplot';
 import 'uplot/dist/uPlot.min.css';
 import { escapeHtml, isFullRange, yRange } from '../chartutil';
+import { useApp } from '../ctx';
 import { fmtClock, fmtDateTime, fmtValue } from '../format';
 import { Icon } from './ui';
 
@@ -36,6 +37,7 @@ const syncFor = (key) => { if (!syncs.has(key)) syncs.set(key, uPlot.sync(key));
  * highlight that series, click it to hide or show it. Charts given the same `sync` move their crosshair together.
  */
 export default function Chart({ series, unit = 'short', kind = 'line', height = 190, markers = NO_MARKERS, thresholds = NO_THRESHOLDS, theme, legend = true, sync, label }) {
+  const { look } = useApp();                    // changes with the theme and the accent, so the lines are redrawn in the new colours
   const host = useRef(null);
   const tip = useRef(null);
   const plot = useRef(null);
@@ -129,7 +131,7 @@ export default function Chart({ series, unit = 'short', kind = 'line', height = 
     const ro = new ResizeObserver(() => u.setSize({ width: el.clientWidth, height }));
     ro.observe(el);
     return () => { ro.disconnect(); u.destroy(); plot.current = null; };
-  }, [data, series, unit, kind, height, markers, thresholds, theme, hasData, sync]);
+  }, [data, series, unit, kind, height, markers, thresholds, theme, look, hasData, sync]);
 
   if (!hasData) {
     return <div className="empty chart-empty"><Icon name="chart" size={20} /><div>No data in this range.</div></div>;

@@ -12,4 +12,6 @@ test('the favicon gets a red dot only while something fires', () => {
   assert.ok(faviconHref(0).startsWith('data:image/svg+xml,'));
   assert.ok(!decodeURIComponent(faviconHref(0)).includes('e5484d'));
   assert.ok(decodeURIComponent(faviconHref(2)).includes('e5484d'));
+  assert.ok(decodeURIComponent(faviconHref(0, 'ember')).includes('#f5873a'));          // the icon follows the accent
+  assert.ok(decodeURIComponent(faviconHref(0, 'nonsense')).includes('#8f72ff'));       // an unknown accent falls back
 });

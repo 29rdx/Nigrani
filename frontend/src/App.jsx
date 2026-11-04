@@ -9,7 +9,9 @@ import { ToastProvider, useToast } from './components/Toast';
 import UserMenu from './components/UserMenu';
 import { Icon, Seg } from './components/ui';
 import { gotoRoute, isTyping } from './palette';
+import { cleanAccent, cleanMode, resolveMode } from './appearance';
 import { faviconHref, pageTitle } from './brand';
+import AppearanceModal from './components/AppearanceModal';
 import { AppCtx, useApp } from './ctx';
 import { lsGet, lsSet } from './format';
 const Alerts = page(() => import('./pages/Alerts'));
@@ -60,9 +62,11 @@ function BootShell() {
 
 const RANGES = ['15m', '1h', '6h', '24h', '7d'];
 
-function useTheme() {
+/** Mode (system / light / dark) and accent colour. The <html> attributes are what the CSS reads; theme-init.js sets them before the first paint. */
+function useAppearance() {
   const media = typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)') : null;
-  const [pref, setPref] = useState(() => lsGet('nigrani.theme', ''));
+  const [mode, setModeState] = useState(() => cleanMode(document.documentElement.dataset.theme || lsGet('nigrani.theme', '')));   // theme-init.js already read the address and storage
+  const [accent, setAccentState] = useState(() => cleanAccent(document.documentElement.dataset.accent || lsGet('nigrani.accent', '')));
   const [sys, setSys] = useState(media ? media.matches : false);
   useEffect(() => {
     if (!media) return undefined;
@@ -70,17 +74,19 @@ function useTheme() {
     media.addEventListener('change', on);
     return () => media.removeEventListener('change', on);
   }, [media]);
-  const theme = pref || (sys ? 'dark' : 'light');
-  useEffect(() => {
-    if (pref) document.documentElement.dataset.theme = pref; else delete document.documentElement.dataset.theme;
-  }, [pref]);
-  const toggle = () => { const n = theme === 'dark' ? 'light' : 'dark'; setPref(n); lsSet('nigrani.theme', n); };
-  return [theme, toggle];
+  const theme = resolveMode(mode, sys);
+  useEffect(() => { if (mode) document.documentElement.dataset.theme = mode; else delete document.documentElement.dataset.theme; }, [mode]);
+  useEffect(() => { document.documentElement.dataset.accent = accent; }, [accent]);
+  const setMode = (m) => { const c = cleanMode(m); setModeState(c); lsSet('nigrani.theme', c); };
+  const setAccent = (id) => { const c = cleanAccent(id); setAccentState(c); lsSet('nigrani.accent', c); };
+  const toggle = () => setMode(theme === 'dark' ? 'light' : 'dark');
+  return { theme, mode, setMode, accent, setAccent, toggle };
 }
 
 function Shell({ me, onLogout }) {
   const [range, setRangeState] = useState(() => (RANGES.includes(lsGet('nigrani.range', '')) ? lsGet('nigrani.range', '1h') : '1h'));
-  const [theme, toggleTheme] = useTheme();
+  const look = useAppearance();
+  const { theme, toggle: toggleTheme } = look;
   const [density, setDensityState] = useState(() => lsGet('nigrani.density', 'comfortable'));
   useEffect(() => { document.documentElement.dataset.density = density; }, [density]);
   const setDensity = (d) => { setDensityState(d); lsSet('nigrani.density', d); };
@@ -91,7 +97,7 @@ function Shell({ me, onLogout }) {
   setCurrentServer(server); // keep imperative api() calls pointed at the selected server
   const setServer = (id) => { setCurrentServer(id); setServerState(id); lsSet('nigrani.server', id); };
   const multi = me.servers.length > 1;
-  const ctx = useMemo(() => ({ range, theme, density, setDensity, me, can: me.can || { edit: false, admin: false }, server, servers: me.servers, multi, setServer }), [range, theme, density, me, server, multi]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ctx = useMemo(() => ({ range, theme, mode: look.mode, setMode: look.setMode, accent: look.accent, setAccent: look.setAccent, look: `${theme}:${look.accent}`, density, setDensity, me, can: me.can || { edit: false, admin: false }, server, servers: me.servers, multi, setServer }), [range, theme, look.mode, look.accent, density, me, server, multi]); // eslint-disable-line react-hooks/exhaustive-deps
   const setRange = (r) => { setRangeState(r); lsSet('nigrani.range', r); };
   return (
     <AppCtx.Provider value={ctx}>
@@ -102,11 +108,12 @@ function Shell({ me, onLogout }) {
 
 // Everything below the provider, so its useApi() calls follow the selected server.
 function Layout({ me, onLogout, toggleTheme, setRange }) {
-  const { range, theme, density, setDensity, server, setServer, multi } = useApp();
+  const { range, theme, accent, density, setDensity, server, setServer, multi } = useApp();
   const route = useHashRoute();
   const [open, setOpen] = useState(false);
   const [palette, setPalette] = useState(false);
   const [help, setHelp] = useState(false);
+  const [appearance, setAppearance] = useState(false);
   const lost = useConnectionLost();
   const toast = useToast();
   const cur = me.servers.find((s) => s.id === server) || me.servers[0];
@@ -176,8 +183,8 @@ function Layout({ me, onLogout, toggleTheme, setRange }) {
   useEffect(() => { document.title = pageTitle(firingCount, title, me.app); }, [firingCount, title, me.app]);
   useEffect(() => {                                       // a red dot on the favicon while something is firing
     const link = document.querySelector('link[rel="icon"]');
-    if (link) { link.type = 'image/svg+xml'; link.href = firingCount > 0 ? faviconHref(firingCount) : '/favicon.svg'; }
-  }, [firingCount]);
+    if (link) { link.type = 'image/svg+xml'; link.href = faviconHref(firingCount, accent); }
+  }, [firingCount, accent]);
 
   let view;
   switch (section) {
@@ -241,7 +248,7 @@ function Layout({ me, onLogout, toggleTheme, setRange }) {
             {['overview', 'host', 'p', 'containers'].includes(section || 'overview') && <Seg value={range} options={RANGES} onChange={setRange} />}
             <button className="search-btn" onClick={() => setPalette(true)} aria-label="Search (Ctrl K)"><Icon name="search" size={15} /><span>Search…</span><kbd>Ctrl K</kbd></button>
             <button className="btn icon" onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}><Icon name={theme === 'dark' ? 'sun' : 'moon'} /></button>
-            <UserMenu me={me} theme={theme} onTheme={toggleTheme} density={density} onDensity={setDensity} onHelp={() => setHelp(true)} onLogout={onLogout} />
+            <UserMenu me={me} onAppearance={() => setAppearance(true)} onHelp={() => setHelp(true)} onLogout={onLogout} />
           </header>
           <main id="main" tabIndex={-1} className="content" key={server}>
             <ErrorBoundary key={route}><Suspense fallback={<PageSkeleton />}>{view}</Suspense></ErrorBoundary>
@@ -250,9 +257,10 @@ function Layout({ me, onLogout, toggleTheme, setRange }) {
       </div>
       <CommandPalette open={palette} onClose={() => setPalette(false)}
         pages={all.map((n) => ({ label: n.label, to: n.to, hint: n.key }))}
-        actions={[{ label: theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme', run: toggleTheme }, { label: 'Keyboard shortcuts', run: () => setHelp(true) },
+        actions={[{ label: theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme', run: toggleTheme }, { label: 'Appearance: colours and spacing', run: () => setAppearance(true) }, { label: 'Keyboard shortcuts', run: () => setHelp(true) },
           ...(me.features.auth ? [{ label: 'Sign out', run: onLogout }] : [])]} />
       {help && <ShortcutsHelp onClose={() => setHelp(false)} />}
+      {appearance && <AppearanceModal onClose={() => setAppearance(false)} />}
     </>
   );
 }
