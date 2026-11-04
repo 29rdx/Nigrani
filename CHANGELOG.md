@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+- Pages now use the full width on wide screens (the content area was capped at 1500px and left a gap on the right); it is centred up to 2000px.
+
 ### Changed
 - **A new look.** The navy-and-blue palette is replaced by neutral graphite (dark) and warm paper (light), with the accent colour chosen under **Appearance** in the
   account menu: Ember (the default; the warning colour is a clear yellow so the two stay apart), Violet, Emerald, Rose or Mono, each with its own light and dark tones, plus mode (system, light,
