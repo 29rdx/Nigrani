@@ -7,7 +7,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 - **A new look.** The navy-and-blue palette is replaced by neutral graphite (dark) and warm paper (light), with the accent colour chosen under **Appearance** in the
-  account menu: Violet (the default, so it never looks like a status colour), Emerald, Ember, Rose or Mono, each with its own light and dark tones, plus mode (system, light,
+  account menu: Ember (the default; the warning colour is a clear yellow so the two stay apart), Violet, Emerald, Rose or Mono, each with its own light and dark tones, plus mode (system, light,
   dark) and spacing. The choice is remembered, applied before the first paint (no flash), can be previewed with `?accent=ember&theme=light`, and recolours the charts, the
   logo and the favicon. Status colours (green, amber, red) are the same in every accent. Contrast was checked for every accent in both modes (Lighthouse accessibility 100).
 - **UI, second pass.** Charts: drag to zoom (every chart on the page together, "Reset zoom" or double-click to undo), one shared crosshair, a legend that highlights on hover and

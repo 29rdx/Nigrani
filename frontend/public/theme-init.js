@@ -3,10 +3,10 @@
   try {
     var ACCENTS = ['violet', 'emerald', 'ember', 'rose', 'mono'];
     var q = new URLSearchParams(location.search);
-    var accent = q.get('accent') || localStorage.getItem('nigrani.accent') || 'violet';
+    var accent = q.get('accent') || localStorage.getItem('nigrani.accent') || 'ember';
     var theme = q.get('theme') || localStorage.getItem('nigrani.theme') || '';
     var root = document.documentElement;
-    root.dataset.accent = ACCENTS.indexOf(accent) >= 0 ? accent : 'violet';
+    root.dataset.accent = ACCENTS.indexOf(accent) >= 0 ? accent : 'ember';
     if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
     var density = localStorage.getItem('nigrani.density');
     if (density === 'compact') root.dataset.density = 'compact';

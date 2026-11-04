@@ -4,7 +4,7 @@
 :root {
   color-scheme: light dark;
   --bg: #f6f6f4; --surface: #ffffff; --surface-2: #efeeeb; --border: #e2e1dc; --text: #161618; --muted: #5b5b63;
-  --ok: #0e7a53; --ok-bg: #dff3ea; --warn: #9a5607; --warn-bg: #fbefd6; --crit: #b9291f; --crit-bg: #fbe6e3;
+  --ok: #0e7a53; --ok-bg: #dff3ea; --warn: #8a5b00; --warn-bg: #fbf0c8; --crit: #b9291f; --crit-bg: #fbe6e3;
   --unk: #5b5b63; --unk-bg: #ebeae6; --shadow: 0 1px 2px rgba(20, 20, 25, .06); --shadow-md: 0 10px 30px rgba(20, 20, 25, .16);
   --s2: #0f9d6e; --s3: #c9780f; --s4: #9333ea; --s5: #d6403f; --s6: #5f6b7a; --s7: #5f9a14; --s8: #0891b2; --crit-solid: #c8362c;
   --radius: 10px; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -15,27 +15,27 @@
 :root[data-theme="dark"] { color-scheme: dark; }
 :root[data-theme="dark"] {
   --bg: #0c0c0e; --surface: #141416; --surface-2: #1c1c1f; --border: #2a2a2f; --text: #ededf0; --muted: #9d9da6;
-  --ok: #3fcf8e; --ok-bg: #0f2a20; --warn: #f2a83b; --warn-bg: #33260d; --crit: #ff6b63; --crit-bg: #3a1816;
+  --ok: #3fcf8e; --ok-bg: #0f2a20; --warn: #f5c33b; --warn-bg: #332a0b; --crit: #ff6b63; --crit-bg: #3a1816;
   --unk: #9d9da6; --unk-bg: #1c1c1f; --shadow: none; --shadow-md: 0 12px 36px rgba(0, 0, 0, .55);
-  --s2: #3fcf8e; --s3: #f2a83b; --s4: #c084fc; --s5: #ff6b63; --s6: #8f98a8; --s7: #a3d94a; --s8: #22d3ee; --crit-solid: #c8362c;
+  --s2: #3fcf8e; --s3: #f5c33b; --s4: #c084fc; --s5: #ff6b63; --s6: #8f98a8; --s7: #a3d94a; --s8: #22d3ee; --crit-solid: #c8362c;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0c0c0e; --surface: #141416; --surface-2: #1c1c1f; --border: #2a2a2f; --text: #ededf0; --muted: #9d9da6;
-    --ok: #3fcf8e; --ok-bg: #0f2a20; --warn: #f2a83b; --warn-bg: #33260d; --crit: #ff6b63; --crit-bg: #3a1816;
+    --ok: #3fcf8e; --ok-bg: #0f2a20; --warn: #f5c33b; --warn-bg: #332a0b; --crit: #ff6b63; --crit-bg: #3a1816;
     --unk: #9d9da6; --unk-bg: #1c1c1f; --shadow: none; --shadow-md: 0 12px 36px rgba(0, 0, 0, .55);
-    --s2: #3fcf8e; --s3: #f2a83b; --s4: #c084fc; --s5: #ff6b63; --s6: #8f98a8; --s7: #a3d94a; --s8: #22d3ee; --crit-solid: #c8362c;
+    --s2: #3fcf8e; --s3: #f5c33b; --s4: #c084fc; --s5: #ff6b63; --s6: #8f98a8; --s7: #a3d94a; --s8: #22d3ee; --crit-solid: #c8362c;
   }
 }
 /* accents */
-:root, :root[data-accent="violet"] {
+:root[data-accent="violet"] {
   --accent: #6540e8; --accent-bg: #eee9ff; --accent-solid: #6540e8; --on-accent: #ffffff; --s1: #6540e8; --logo-a: #8f72ff; --logo-b: #6540e8;
 }
-:root[data-theme="dark"], :root[data-accent="violet"][data-theme="dark"] {
+:root[data-accent="violet"][data-theme="dark"] {
   --accent: #a78bfa; --accent-bg: #241b48; --accent-solid: #7455f0; --on-accent: #ffffff; --s1: #a78bfa; --logo-a: #a78bfa; --logo-b: #7455f0;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]), :root[data-accent="violet"]:not([data-theme="light"]) {
+  :root[data-accent="violet"]:not([data-theme="light"]) {
   --accent: #a78bfa; --accent-bg: #241b48; --accent-solid: #7455f0; --on-accent: #ffffff; --s1: #a78bfa; --logo-a: #a78bfa; --logo-b: #7455f0;
   }
 }
@@ -50,14 +50,14 @@
   --accent: #34d399; --accent-bg: #0e2b21; --accent-solid: #10b981; --on-accent: #04150e; --s1: #34d399; --logo-a: #34d399; --logo-b: #10b981;
   }
 }
-:root[data-accent="ember"] {
+:root, :root[data-accent="ember"] {
   --accent: #b8470a; --accent-bg: #fcebdc; --accent-solid: #bf4b0b; --on-accent: #ffffff; --s1: #b8470a; --logo-a: #f5873a; --logo-b: #bf4b0b;
 }
-:root[data-accent="ember"][data-theme="dark"] {
+:root[data-theme="dark"], :root[data-accent="ember"][data-theme="dark"] {
   --accent: #ff9d52; --accent-bg: #3a210d; --accent-solid: #f97316; --on-accent: #190a02; --s1: #ff9d52; --logo-a: #ffb066; --logo-b: #f97316;
 }
 @media (prefers-color-scheme: dark) {
-  :root[data-accent="ember"]:not([data-theme="light"]) {
+  :root:not([data-theme="light"]), :root[data-accent="ember"]:not([data-theme="light"]) {
   --accent: #ff9d52; --accent-bg: #3a210d; --accent-solid: #f97316; --on-accent: #190a02; --s1: #ff9d52; --logo-a: #ffb066; --logo-b: #f97316;
   }
 }

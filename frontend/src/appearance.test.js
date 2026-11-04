@@ -4,11 +4,11 @@ import { ACCENTS, accentOf, cleanAccent, cleanMode, fromQuery, resolveMode } fro
 
 test('unknown accents and modes fall back to the defaults instead of breaking the page', () => {
   assert.equal(cleanAccent('ember'), 'ember');
-  assert.equal(cleanAccent('<script>'), 'violet');
-  assert.equal(cleanAccent(null), 'violet');
+  assert.equal(cleanAccent('<script>'), 'ember');
+  assert.equal(cleanAccent(null), 'ember');
   assert.equal(cleanMode('dark'), 'dark');
   assert.equal(cleanMode('blue'), '');
-  assert.equal(accentOf('nope').id, 'violet');
+  assert.equal(accentOf('nope').id, 'ember');
 });
 
 test('"System" follows the system and an explicit mode wins', () => {
